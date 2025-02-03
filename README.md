@@ -1,1 +1,3 @@
 # TikTokClone
+
+Init project
