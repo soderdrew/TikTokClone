@@ -1,3 +1,53 @@
+# Reel AI App
+
+## Setup Requirements
+- Node.js
+- Expo CLI
+- EAS CLI (`npm install -g eas-cli`)
+- Apple Developer Account
+- Firebase project
+
+## Development Setup
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Firebase Configuration:
+- Place `google-services.json` in project root
+- Place `GoogleService-Info.plist` in project root
+
+3. First-time Setup:
+```bash
+eas build --profile development --platform ios
+```
+- This creates a development build (10-15 minutes)
+- Install the resulting app on your iPhone
+- You only need to rebuild when changing native dependencies
+
+4. Daily Development:
+```bash
+npx expo start
+```
+- This connects to your development build
+- Changes reflect immediately without rebuilding
+- Most development work happens here
+
+## Important Notes
+- Development builds persist on your device
+- Rebuilds (using `eas build`) only needed when:
+  - Adding new native packages (e.g., camera, biometrics)
+  - Changing Firebase configuration
+  - Updating iOS/Android permissions
+  - Modifying native app settings
+- Regular development (no rebuild needed):
+  - Writing React components
+  - Styling changes
+  - Adding new screens
+  - API integrations
+  - Business logic changes
+- 30 monthly build minutes is sufficient as rebuilds are rare
+
 # Welcome to your Expo app 👋
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
