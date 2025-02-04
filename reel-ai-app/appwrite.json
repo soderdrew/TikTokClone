@@ -1,0 +1,430 @@
+{
+    "projectId": "67a2222d00028ad14c75",
+    "projectName": "reel-ai-app",
+    "settings": {
+        "services": {
+            "account": true,
+            "avatars": false,
+            "databases": true,
+            "locale": false,
+            "health": false,
+            "storage": true,
+            "teams": false,
+            "users": true,
+            "functions": true,
+            "graphql": true,
+            "messaging": false
+        },
+        "auth": {
+            "methods": {
+                "jwt": true,
+                "phone": true,
+                "invites": true,
+                "anonymous": true,
+                "email-otp": true,
+                "magic-url": true,
+                "email-password": true
+            },
+            "security": {
+                "duration": 31536000,
+                "limit": 0,
+                "sessionsLimit": 10,
+                "passwordHistory": 0,
+                "passwordDictionary": false,
+                "personalDataCheck": false,
+                "sessionAlerts": false,
+                "mockNumbers": []
+            }
+        }
+    },
+    "databases": [
+        {
+            "$id": "reel-ai-main",
+            "name": "Reel AI Main Database",
+            "enabled": true
+        }
+    ],
+    "collections": [
+        {
+            "$id": "profiles",
+            "databaseId": "reel-ai-main",
+            "name": "User Profiles",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "name",
+                    "type": "string",
+                    "size": 100,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "bio",
+                    "type": "string",
+                    "size": 500,
+                    "required": false,
+                    "array": false
+                },
+                {
+                    "key": "avatarUrl",
+                    "type": "string",
+                    "size": 255,
+                    "required": false,
+                    "array": false
+                },
+                {
+                    "key": "recipesCount",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "max": 2147483647,
+                    "array": false
+                },
+                {
+                    "key": "followersCount",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "max": 2147483647,
+                    "array": false
+                },
+                {
+                    "key": "followingCount",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "max": 2147483647,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "userId_unique",
+                    "type": "unique",
+                    "attributes": [
+                        "userId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ],
+            "enabled": true
+        },
+        {
+            "$id": "videos",
+            "databaseId": "reel-ai-main",
+            "name": "Recipe Videos",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "title",
+                    "type": "string",
+                    "size": 100,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "description",
+                    "type": "string",
+                    "size": 1000,
+                    "required": false,
+                    "array": false
+                },
+                {
+                    "key": "videoUrl",
+                    "type": "string",
+                    "size": 255,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "thumbnailUrl",
+                    "type": "string",
+                    "size": 255,
+                    "required": false,
+                    "array": false
+                },
+                {
+                    "key": "duration",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "array": false
+                },
+                {
+                    "key": "cuisine",
+                    "type": "string",
+                    "size": 50,
+                    "required": false,
+                    "array": false
+                },
+                {
+                    "key": "difficulty",
+                    "type": "string",
+                    "size": 20,
+                    "required": false,
+                    "array": false
+                },
+                {
+                    "key": "cookingTime",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "array": false
+                },
+                {
+                    "key": "likesCount",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "array": false
+                },
+                {
+                    "key": "commentsCount",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "userId",
+                    "type": "key",
+                    "attributes": [
+                        "userId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "cuisine",
+                    "type": "key",
+                    "attributes": [
+                        "cuisine"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "createdAt",
+                    "type": "key",
+                    "attributes": [
+                        "createdAt"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ],
+            "enabled": true
+        },
+        {
+            "$id": "likes",
+            "databaseId": "reel-ai-main",
+            "name": "Video Likes",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "videoId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "user_video_unique",
+                    "type": "unique",
+                    "attributes": [
+                        "userId",
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "videoId",
+                    "type": "key",
+                    "attributes": [
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ],
+            "enabled": true
+        },
+        {
+            "$id": "comments",
+            "databaseId": "reel-ai-main",
+            "name": "Video Comments",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "videoId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "content",
+                    "type": "string",
+                    "size": 1000,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "videoId",
+                    "type": "key",
+                    "attributes": [
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "createdAt",
+                    "type": "key",
+                    "attributes": [
+                        "createdAt"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ],
+            "enabled": true
+        },
+        {
+            "$id": "saved_recipes",
+            "databaseId": "reel-ai-main",
+            "name": "Saved Recipes",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "videoId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "user_video_unique",
+                    "type": "unique",
+                    "attributes": ["userId", "videoId"],
+                    "orders": ["ASC", "ASC"]
+                },
+                {
+                    "key": "userId",
+                    "type": "key",
+                    "attributes": ["userId"],
+                    "orders": ["ASC"]
+                }
+            ],
+            "enabled": true
+        }
+    ]
+}

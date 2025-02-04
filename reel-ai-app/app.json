@@ -45,9 +45,6 @@
           "backgroundColor": "#ffffff"
         }
       ]
-      // Comment these out temporarily
-      // "@react-native-firebase/app",
-      // "@react-native-firebase/auth"
     ],
     "experiments": {
       "typedRoutes": true,
