@@ -40,6 +40,7 @@ export default function HomeScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [likedVideos, setLikedVideos] = useState<Set<string>>(new Set());
     const [bookmarkedVideos, setBookmarkedVideos] = useState<Set<string>>(new Set());
+    const [currentUserId, setCurrentUserId] = useState<string>('');
     const flatListRef = React.useRef<FlatList>(null);
 
     const checkAuth = async () => {
@@ -48,6 +49,11 @@ export default function HomeScreen() {
             router.replace('/auth/login');
             return false;
         }
+        // Get current user ID
+        const user = await AuthService.getCurrentUser();
+        if (user) {
+            setCurrentUserId(user.$id);
+        }
         return true;
     };
 
@@ -55,6 +61,14 @@ export default function HomeScreen() {
         try {
             const isAuthenticated = await checkAuth();
             if (!isAuthenticated) return;
+
+            // Get current user ID first
+            const user = await AuthService.getCurrentUser();
+            if (!user) {
+                console.error('No user found');
+                return;
+            }
+            setCurrentUserId(user.$id);
 
             const response = await DatabaseService.getVideos(10);
             setVideos(response.documents as Video[]);
@@ -81,7 +95,7 @@ export default function HomeScreen() {
 
                 // Check if video is liked
                 try {
-                    const isLiked = await DatabaseService.isVideoLiked(video.userId, video.$id);
+                    const isLiked = await DatabaseService.isVideoLiked(user.$id, video.$id);
                     if (isLiked) {
                         newLikedVideos.add(video.$id);
                     }
@@ -91,7 +105,7 @@ export default function HomeScreen() {
 
                 // Check if video is saved
                 try {
-                    const isSaved = await DatabaseService.isRecipeSaved(video.userId, video.$id);
+                    const isSaved = await DatabaseService.isRecipeSaved(user.$id, video.$id);
                     if (isSaved) {
                         newBookmarkedVideos.add(video.$id);
                     }
@@ -120,24 +134,53 @@ export default function HomeScreen() {
 
     const handleLike = async (video: Video) => {
         try {
-            if (likedVideos.has(video.$id)) {
-                await DatabaseService.unlikeVideo(video.userId, video.$id);
-                setLikedVideos(prev => {
-                    const newSet = new Set(prev);
+            const isCurrentlyLiked = likedVideos.has(video.$id);
+            
+            // Optimistically update UI
+            setLikedVideos(prev => {
+                const newSet = new Set(prev);
+                if (isCurrentlyLiked) {
                     newSet.delete(video.$id);
-                    return newSet;
-                });
-            } else {
-                await DatabaseService.likeVideo(video.userId, video.$id);
-                setLikedVideos(prev => {
-                    const newSet = new Set(prev);
+                } else {
                     newSet.add(video.$id);
-                    return newSet;
-                });
+                }
+                return newSet;
+            });
+
+            // Perform the actual API call
+            if (isCurrentlyLiked) {
+                await DatabaseService.unlikeVideo(currentUserId, video.$id);
+            } else {
+                await DatabaseService.likeVideo(currentUserId, video.$id);
             }
-            loadVideos(); // Refresh to get updated counts
+
+            // Fetch the updated video data
+            const updatedVideo = await DatabaseService.getVideoById(video.$id);
+            
+            // Update the videos state with the latest data
+            setVideos(prev => 
+                prev.map(v => {
+                    if (v.$id === video.$id) {
+                        return {
+                            ...v,
+                            likesCount: updatedVideo.likesCount
+                        };
+                    }
+                    return v;
+                })
+            );
         } catch (error) {
             console.error('Error toggling like:', error);
+            // Revert optimistic updates on error
+            setLikedVideos(prev => {
+                const newSet = new Set(prev);
+                if (likedVideos.has(video.$id)) {
+                    newSet.add(video.$id);
+                } else {
+                    newSet.delete(video.$id);
+                }
+                return newSet;
+            });
         }
     };
 
@@ -147,24 +190,53 @@ export default function HomeScreen() {
 
     const handleBookmark = async (video: Video) => {
         try {
-            if (bookmarkedVideos.has(video.$id)) {
-                await DatabaseService.unsaveRecipe(video.userId, video.$id);
-                setBookmarkedVideos(prev => {
-                    const newSet = new Set(prev);
+            const isCurrentlyBookmarked = bookmarkedVideos.has(video.$id);
+            
+            // Optimistically update UI
+            setBookmarkedVideos(prev => {
+                const newSet = new Set(prev);
+                if (isCurrentlyBookmarked) {
                     newSet.delete(video.$id);
-                    return newSet;
-                });
-            } else {
-                await DatabaseService.saveRecipe(video.userId, video.$id);
-                setBookmarkedVideos(prev => {
-                    const newSet = new Set(prev);
+                } else {
                     newSet.add(video.$id);
-                    return newSet;
-                });
+                }
+                return newSet;
+            });
+
+            // Perform the actual API call
+            if (isCurrentlyBookmarked) {
+                await DatabaseService.unsaveRecipe(currentUserId, video.$id);
+            } else {
+                await DatabaseService.saveRecipe(currentUserId, video.$id);
             }
-            loadVideos(); // Refresh to get updated counts
+
+            // Fetch the updated video data
+            const updatedVideo = await DatabaseService.getVideoById(video.$id);
+            
+            // Update the videos state with the latest data
+            setVideos(prev => 
+                prev.map(v => {
+                    if (v.$id === video.$id) {
+                        return {
+                            ...v,
+                            bookmarksCount: updatedVideo.bookmarksCount
+                        };
+                    }
+                    return v;
+                })
+            );
         } catch (error) {
             console.error('Error toggling bookmark:', error);
+            // Revert optimistic updates on error
+            setBookmarkedVideos(prev => {
+                const newSet = new Set(prev);
+                if (bookmarkedVideos.has(video.$id)) {
+                    newSet.add(video.$id);
+                } else {
+                    newSet.delete(video.$id);
+                }
+                return newSet;
+            });
         }
     };
 
