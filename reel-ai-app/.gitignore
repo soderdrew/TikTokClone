@@ -40,3 +40,7 @@ app-example
 # Firebase config files
 google-services.json
 GoogleService-Info.plist
+
+# Environment variables
+.env
+.env.local

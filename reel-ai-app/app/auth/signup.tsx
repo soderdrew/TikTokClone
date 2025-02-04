@@ -1,18 +1,27 @@
 import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, router } from 'expo-router';
+import { AuthService } from '../services/appwrite';
+import { Models } from 'react-native-appwrite';
 
 export default function SignupScreen() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [name, setName] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [user, setUser] = React.useState<Models.User<Models.Preferences> | null>(null);
+
+  const validateEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
 
   const handleSignup = async () => {
     setError('');
     
     // Basic validation
-    if (!email || !password) {
+    if (!email || !password || !name) {
       setError('Please fill in all fields');
       return;
     }
@@ -29,65 +38,82 @@ export default function SignupScreen() {
 
     setIsLoading(true);
     try {
-      // Firebase auth will be added here later
-      console.log('Signup:', email, password);
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-    } catch (err) {
-      setError('Signup failed. Please try again.');
+      // Create the account first
+      await AuthService.createAccount(email, password, name);
+      
+      // Then create a session
+      await AuthService.login(email, password);
+      
+      // Get the user details
+      const currentUser = await AuthService.getCurrentUser();
+      setUser(currentUser);
+      
+      // Navigate to home
+      router.replace('/(tabs)/home');
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      if (err?.message?.includes('unique')) {
+        setError('This email is already registered. Please try logging in instead.');
+      } else {
+        setError('Signup failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <Text style={styles.title}>Join Reel Recipes</Text>
-        <Text style={styles.subtitle}>Share your culinary journey</Text>
-        <Text style={styles.description}>Create and share your favorite recipes with food lovers around the world.</Text>
+        <Text style={styles.subtitle}>Create an account to start your culinary journey!</Text>
       </View>
-      
-      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TextInput
-        placeholder="Email"
-        placeholderTextColor="#666"
-        value={email}
-        onChangeText={setEmail}
-        style={[styles.input, { color: '#666' }]}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <TextInput
-        placeholder="Password"
-        placeholderTextColor="#666"
-        value={password}
-        onChangeText={setPassword}
-        style={[styles.input, { color: '#666' }]}
-        secureTextEntry
-        autoCapitalize="none"
-      />
+      <View style={styles.formContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Full Name"
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        
+        <TouchableOpacity 
+          style={styles.signupButton} 
+          onPress={handleSignup}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.signupButtonText}>Create Account</Text>
+          )}
+        </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.button}
-        onPress={handleSignup}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Sign Up</Text>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.footer}>
-        <Text style={{ color: '#666' }}>Already have an account? </Text>
-        <Link href="/auth/login" style={styles.link}>Login</Link>
+        <View style={styles.loginContainer}>
+          <Text style={styles.loginText}>Already have an account? </Text>
+          <Link href="/auth/login" asChild>
+            <TouchableOpacity>
+              <Text style={styles.loginLink}>Login</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
       </View>
     </View>
   );
@@ -96,62 +122,59 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
     padding: 20,
-    justifyContent: 'center',
   },
   headerContainer: {
+    marginTop: 60,
     marginBottom: 40,
-    alignItems: 'center',
-    paddingHorizontal: 20,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#fff',
     marginBottom: 10,
   },
   subtitle: {
-    fontSize: 18,
-    color: 'white',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: 16,
+    color: '#888',
   },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 20,
+  formContainer: {
+    flex: 1,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#1a1a1a',
     borderRadius: 8,
     padding: 15,
     marginBottom: 15,
-    backgroundColor: '#fff',
+    color: '#fff',
   },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 15,
+  errorText: {
+    color: '#ff4444',
+    marginBottom: 15,
+  },
+  signupButton: {
+    backgroundColor: '#ff4444',
     borderRadius: 8,
+    padding: 15,
     alignItems: 'center',
+    marginTop: 10,
   },
-  buttonText: {
+  signupButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  error: {
-    color: 'red',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  footer: {
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 20,
   },
-  link: {
-    color: '#007AFF',
+  loginText: {
+    color: '#888',
+  },
+  loginLink: {
+    color: '#ff4444',
+    fontWeight: 'bold',
   },
 }); 

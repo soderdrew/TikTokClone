@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { Link, router } from 'expo-router';
+import { AuthService } from '../services/appwrite';
+import { Models } from 'react-native-appwrite';
 
 export default function LoginScreen() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [user, setUser] = React.useState<Models.User<Models.Preferences> | null>(null);
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,11 +37,18 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
-      // Simulate successful login
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Create session
+      await AuthService.login(email, password);
+      
+      // Get user details
+      const currentUser = await AuthService.getCurrentUser();
+      setUser(currentUser);
+      
+      // Navigate to home
       router.replace('/(tabs)/home');
     } catch (err) {
-      setError('Login failed. Please try again.');
+      console.error('Login error:', err);
+      setError('Login failed. Please check your credentials and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -48,46 +58,49 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Your Kitchen Awaits</Text>
-        <Text style={styles.description}>Continue your culinary journey and explore new recipes from around the world.</Text>
+        <Text style={styles.subtitle}>Sign in to continue cooking!</Text>
       </View>
-      
-      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <TextInput
-        placeholder="Email"
-        placeholderTextColor="#666"
-        value={email}
-        onChangeText={setEmail}
-        style={[styles.input, { color: '#666' }]}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <TextInput
-        placeholder="Password"
-        placeholderTextColor="#666"
-        value={password}
-        onChangeText={setPassword}
-        style={[styles.input, { color: '#666' }]}
-        secureTextEntry
-        autoCapitalize="none"
-      />
+      <View style={styles.formContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          placeholderTextColor="#666"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholderTextColor="#666"
+        />
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        
+        <TouchableOpacity 
+          style={styles.loginButton} 
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Login</Text>
+          )}
+        </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.button}
-        onPress={handleLogin}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Login</Text>
-        )}
-      </TouchableOpacity>
-
-      <View style={styles.footer}>
-        <Text style={{ color: '#666' }}>Don't have an account? </Text>
-        <Link href="/auth/signup" style={styles.link}>Sign Up</Link>
+        <View style={styles.signupContainer}>
+          <Text style={styles.signupText}>Don't have an account? </Text>
+          <Link href="/auth/signup" asChild>
+            <TouchableOpacity>
+              <Text style={styles.signupLink}>Sign Up</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
       </View>
     </View>
   );
@@ -96,63 +109,59 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000',
     padding: 20,
-    justifyContent: 'center',
   },
   headerContainer: {
+    marginTop: 60,
     marginBottom: 40,
-    alignItems: 'center',
-    paddingHorizontal: 20,
   },
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: '#fff',
     marginBottom: 10,
   },
   subtitle: {
-    fontSize: 18,
-    color: 'white',
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: 16,
+    color: '#888',
   },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 20,
+  formContainer: {
+    flex: 1,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
+    backgroundColor: '#1a1a1a',
     borderRadius: 8,
     padding: 15,
     marginBottom: 15,
-    backgroundColor: '#fff',
+    color: '#fff',
   },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 15,
+  errorText: {
+    color: '#ff4444',
+    marginBottom: 15,
+  },
+  loginButton: {
+    backgroundColor: '#ff4444',
     borderRadius: 8,
+    padding: 15,
     alignItems: 'center',
+    marginTop: 10,
   },
-  buttonText: {
+  loginButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  error: {
-    color: 'red',
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  footer: {
+  signupContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 20,
   },
-  link: {
-    color: '#007AFF',
+  signupText: {
+    color: '#888',
   },
-  
+  signupLink: {
+    color: '#ff4444',
+    fontWeight: 'bold',
+  },
 }); 
