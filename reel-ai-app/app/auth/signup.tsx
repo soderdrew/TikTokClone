@@ -52,8 +52,9 @@ export default function SignupScreen() {
       router.replace('/(tabs)/home');
     } catch (err: any) {
       console.error('Signup error:', err);
-      if (err?.message?.includes('unique')) {
-        setError('This email is already registered. Please try logging in instead.');
+      // Check for specific error about existing user
+      if (err?.message?.includes('already exists')) {
+        setError('An account with this email already exists. Please try logging in instead.');
       } else {
         setError('Signup failed. Please try again.');
       }

@@ -37,6 +37,14 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     try {
+      // Check if user is already logged in
+      const isLoggedIn = await AuthService.isLoggedIn();
+      if (isLoggedIn) {
+        // If already logged in, just redirect to home
+        router.replace('/(tabs)/home');
+        return;
+      }
+
       // Create session
       await AuthService.login(email, password);
       

@@ -5,35 +5,66 @@ import {
   StyleSheet, 
   Image, 
   TouchableOpacity, 
-  FlatList,
-  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-
-const { width } = Dimensions.get('window');
-const THUMBNAIL_SIZE = width / 3;
-
-interface Recipe {
-  id: string;
-  thumbnail: string;
-  title: string;
-  likes: number;
-}
+import { router } from 'expo-router';
+import { AuthService } from '../services/appwrite';
+import { Models } from 'react-native-appwrite';
 
 export default function ProfileScreen() {
-  const dummyRecipes: Recipe[] = [
-    { id: '1', thumbnail: 'placeholder', title: 'Recipe 1', likes: 1200 },
-    { id: '2', thumbnail: 'placeholder', title: 'Recipe 2', likes: 800 },
-    { id: '3', thumbnail: 'placeholder', title: 'Recipe 3', likes: 2300 },
-  ];
+  const [user, setUser] = React.useState<Models.User<Models.Preferences> | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+
+  // Fetch user data on component mount
+  React.useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const currentUser = await AuthService.getCurrentUser();
+      setUser(currentUser);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      await AuthService.logout();
+      router.replace('/auth/login');
+    } catch (error) {
+      console.error('Error logging out:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ff4444" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.username}>@chef_username</Text>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Ionicons name="settings-outline" size={24} color="white" />
+        <Text style={styles.username}>{user.name}</Text>
+        <TouchableOpacity 
+          style={styles.logoutButton} 
+          onPress={handleLogout}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -48,42 +79,28 @@ export default function ProfileScreen() {
             <Text style={styles.editButtonText}>Edit Profile</Text>
           </TouchableOpacity>
         </View>
-        
+
+        {/* Stats */}
         <View style={styles.stats}>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>42</Text>
-            <Text style={styles.statLabel}>Posts</Text>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Recipes</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>1.2K</Text>
+            <Text style={styles.statNumber}>0</Text>
             <Text style={styles.statLabel}>Followers</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={styles.statNumber}>890</Text>
+            <Text style={styles.statNumber}>0</Text>
             <Text style={styles.statLabel}>Following</Text>
           </View>
         </View>
-      </View>
 
-      {/* Bio */}
-      <View style={styles.bioContainer}>
-        <Text style={styles.name}>Chef John Doe</Text>
-        <Text style={styles.bio}>Passionate about creating delicious recipes 🍳</Text>
+        {/* Empty State Message */}
+        <View style={styles.emptyStateContainer}>
+          <Text style={styles.emptyStateText}>No recipes posted yet</Text>
+        </View>
       </View>
-
-      {/* Recipe Grid */}
-      <FlatList
-        data={dummyRecipes}
-        numColumns={3}
-        renderItem={({ item }) => (
-          <TouchableOpacity style={styles.thumbnail}>
-            <View style={styles.thumbnailPlaceholder}>
-              <Text style={styles.thumbnailTitle}>{item.title}</Text>
-            </View>
-          </TouchableOpacity>
-        )}
-        keyExtractor={item => item.id}
-      />
     </View>
   );
 }
@@ -93,89 +110,85 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
-    paddingTop: 50,
+    padding: 20,
+    paddingTop: 60,
   },
   username: {
-    color: 'white',
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#fff',
   },
-  settingsButton: {
-    padding: 5,
+  logoutButton: {
+    backgroundColor: '#ff4444',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  logoutButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   profileInfo: {
-    flexDirection: 'row',
-    padding: 15,
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   avatarContainer: {
     alignItems: 'center',
+    marginBottom: 20,
   },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: 10,
+    marginBottom: 15,
   },
   editButton: {
-    backgroundColor: '#333',
-    paddingHorizontal: 15,
+    backgroundColor: '#1a1a1a',
+    paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
   },
   editButtonText: {
-    color: 'white',
-    fontSize: 12,
+    color: '#fff',
+    fontWeight: '600',
   },
   stats: {
-    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginLeft: 20,
+    width: '100%',
+    marginTop: 20,
+    paddingHorizontal: 20,
   },
   statItem: {
     alignItems: 'center',
   },
   statNumber: {
-    color: 'white',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#fff',
   },
   statLabel: {
-    color: '#666',
-    fontSize: 12,
+    color: '#888',
+    marginTop: 5,
   },
-  bioContainer: {
-    padding: 15,
-  },
-  name: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  bio: {
-    color: '#666',
-    fontSize: 14,
-  },
-  thumbnail: {
-    width: THUMBNAIL_SIZE,
-    height: THUMBNAIL_SIZE,
-    padding: 1,
-  },
-  thumbnailPlaceholder: {
+  emptyStateContainer: {
     flex: 1,
-    backgroundColor: '#333',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 40,
   },
-  thumbnailTitle: {
-    color: 'white',
-    fontSize: 12,
+  emptyStateText: {
+    color: '#888',
+    fontSize: 16,
   },
 }); 
