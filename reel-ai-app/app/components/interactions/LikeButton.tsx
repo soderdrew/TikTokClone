@@ -8,7 +8,7 @@ interface LikeButtonProps {
   onPress: () => void;
 }
 
-export function LikeButton({ isLiked, likes, onPress }: LikeButtonProps) {
+export default function LikeButton({ isLiked, likes, onPress }: LikeButtonProps) {
   const [localLikes, setLocalLikes] = React.useState(likes);
 
   const handlePress = () => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import InteractionButton from '../common/InteractionButton';
-import { CommentsModal } from '../modals/CommentsModal';
+import CommentsModal from '../modals/CommentsModal';
 
 interface CommentButtonProps {
   comments: number;
@@ -8,7 +8,7 @@ interface CommentButtonProps {
   videoId: string;
 }
 
-export function CommentButton({ comments, onPress, videoId }: CommentButtonProps) {
+export default function CommentButton({ comments, onPress, videoId }: CommentButtonProps) {
   const [modalVisible, setModalVisible] = React.useState(false);
 
   const handlePress = () => {

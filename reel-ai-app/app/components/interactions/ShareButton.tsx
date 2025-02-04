@@ -1,6 +1,6 @@
 import React from 'react';
 import InteractionButton from '../common/InteractionButton';
-import { ShareModal } from '../modals/ShareModal';
+import ShareModal from '../modals/ShareModal';
 
 interface ShareButtonProps {
   videoId: string;
@@ -8,7 +8,7 @@ interface ShareButtonProps {
   onPress?: () => void;
 }
 
-export function ShareButton({ videoId, title, onPress }: ShareButtonProps) {
+export default function ShareButton({ videoId, title, onPress }: ShareButtonProps) {
   const [modalVisible, setModalVisible] = React.useState(false);
 
   const handlePress = () => {

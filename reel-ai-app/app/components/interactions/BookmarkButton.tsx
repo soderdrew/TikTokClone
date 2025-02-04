@@ -7,7 +7,7 @@ interface BookmarkButtonProps {
   onPress: () => void;
 }
 
-export function BookmarkButton({ isBookmarked, bookmarks, onPress }: BookmarkButtonProps) {
+export default function BookmarkButton({ isBookmarked, bookmarks, onPress }: BookmarkButtonProps) {
   const [localBookmarks, setLocalBookmarks] = React.useState(bookmarks);
 
   const handlePress = () => {

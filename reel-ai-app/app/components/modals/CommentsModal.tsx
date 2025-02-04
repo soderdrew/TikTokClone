@@ -34,7 +34,7 @@ const DUMMY_COMMENTS: Comment[] = [
   { id: '3', username: 'foodie', text: 'Made this yesterday, turned out perfect!', likes: 45, timeAgo: '30m' },
 ];
 
-export function CommentsModal({ visible, onClose, videoId }: CommentsModalProps) {
+export default function CommentsModal({ visible, onClose, videoId }: CommentsModalProps) {
   const [newComment, setNewComment] = React.useState('');
   const slideAnim = React.useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');

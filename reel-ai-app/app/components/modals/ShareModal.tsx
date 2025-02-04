@@ -19,7 +19,7 @@ interface ShareModalProps {
   title: string;
 }
 
-export function ShareModal({ visible, onClose, videoId, title }: ShareModalProps) {
+export default function ShareModal({ visible, onClose, videoId, title }: ShareModalProps) {
   const [isLoading, setIsLoading] = React.useState(true);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');

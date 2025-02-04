@@ -2,10 +2,10 @@ import { View, Text, StyleSheet, FlatList, Dimensions, Pressable, Animated } fro
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import InteractionButton from '../components/common/InteractionButton';
-import { LikeButton } from '../components/interactions/LikeButton';
-import { CommentButton } from '../components/interactions/CommentButton';
-import { ShareButton } from '../components/interactions/ShareButton';
-import { BookmarkButton } from '../components/interactions/BookmarkButton';
+import LikeButton from '../components/interactions/LikeButton';
+import CommentButton from '../components/interactions/CommentButton';
+import ShareButton from '../components/interactions/ShareButton';
+import BookmarkButton from '../components/interactions/BookmarkButton';
 
 const { width, height } = Dimensions.get('window');
 
