@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -8,13 +8,15 @@ import {
   ActivityIndicator,
   FlatList,
   Dimensions,
-  RefreshControl
+  RefreshControl,
+  Animated
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { AuthService, DatabaseService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { VideoCard } from '../components/VideoCard';
+import EditProfileModal from '../components/modals/EditProfileModal';
 
 interface UserProfile extends Models.Document {
   userId: string;
@@ -49,6 +51,9 @@ export default function ProfileScreen() {
   const [activeTab, setActiveTab] = React.useState<'recipes' | 'liked' | 'saved'>('recipes');
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const [isEditModalVisible, setIsEditModalVisible] = React.useState(false);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   // Fetch user data on component mount
   React.useEffect(() => {
@@ -73,6 +78,42 @@ export default function ProfileScreen() {
     }
   };
 
+  const animateProfileUpdate = () => {
+    // Reset animations
+    fadeAnim.setValue(1);
+    scaleAnim.setValue(1);
+
+    // Create animation sequence
+    Animated.sequence([
+      // Fade out and scale down
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0.7,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]),
+      // Fade in and scale up
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  };
+
   const loadUserData = async () => {
     try {
       setIsLoading(true);
@@ -89,6 +130,9 @@ export default function ProfileScreen() {
 
       // Load all video types
       await loadAllVideos(currentUser.$id);
+      
+      // Trigger animation after profile update
+      animateProfileUpdate();
     } catch (error) {
       console.error('Error loading user data:', error);
     } finally {
@@ -115,8 +159,7 @@ export default function ProfileScreen() {
   };
 
   const handleEditProfile = () => {
-    // We'll implement this next
-    console.log('Edit profile pressed');
+    setIsEditModalVisible(true);
   };
 
   const getActiveVideos = () => {
@@ -202,7 +245,15 @@ export default function ProfileScreen() {
             </View>
 
             {/* Profile Info */}
-            <View style={styles.profileInfo}>
+            <Animated.View 
+              style={[
+                styles.profileInfo,
+                {
+                  opacity: fadeAnim,
+                  transform: [{ scale: scaleAnim }]
+                }
+              ]}
+            >
               <View style={styles.avatarContainer}>
                 <Image
                   style={styles.avatar}
@@ -210,18 +261,22 @@ export default function ProfileScreen() {
                     uri: profile.avatarUrl || 'https://via.placeholder.com/100'
                   }}
                 />
-                <TouchableOpacity 
-                  style={styles.editButton}
-                  onPress={handleEditProfile}
-                >
-                  <Text style={styles.editButtonText}>Edit Profile</Text>
-                </TouchableOpacity>
               </View>
 
               {/* Bio */}
               {profile.bio ? (
                 <Text style={styles.bio}>{profile.bio}</Text>
-              ) : null}
+              ) : (
+                <Text style={[styles.bio, styles.placeholderBio]}>No bio yet</Text>
+              )}
+
+              {/* Edit Profile Button */}
+              <TouchableOpacity 
+                style={styles.editButton}
+                onPress={handleEditProfile}
+              >
+                <Text style={styles.editButtonText}>Edit Profile</Text>
+              </TouchableOpacity>
 
               {/* Stats */}
               <View style={styles.stats}>
@@ -272,7 +327,7 @@ export default function ProfileScreen() {
                   />
                 </TouchableOpacity>
               </View>
-            </View>
+            </Animated.View>
           </>
         }
         ListEmptyComponent={
@@ -286,7 +341,7 @@ export default function ProfileScreen() {
               <TouchableOpacity 
                 style={styles.createButton}
                 onPress={() => {
-                  console.log('Create recipe pressed');
+                  router.push('/create');
                 }}
               >
                 <Text style={styles.createButtonText}>Create Your First Recipe</Text>
@@ -296,6 +351,16 @@ export default function ProfileScreen() {
         }
         contentContainerStyle={styles.flatListContent}
       />
+
+      {/* Edit Profile Modal */}
+      {profile && (
+        <EditProfileModal
+          visible={isEditModalVisible}
+          onClose={() => setIsEditModalVisible(false)}
+          currentProfile={profile}
+          onProfileUpdate={loadUserData}
+        />
+      )}
     </View>
   );
 }
@@ -356,19 +421,23 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    marginBottom: 15,
   },
   bio: {
     color: '#fff',
     textAlign: 'center',
-    marginBottom: 20,
+    marginVertical: 15,
     paddingHorizontal: 20,
+  },
+  placeholderBio: {
+    color: '#666',
+    fontStyle: 'italic',
   },
   editButton: {
     backgroundColor: '#1a1a1a',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
+    marginBottom: 20,
   },
   editButtonText: {
     color: '#fff',

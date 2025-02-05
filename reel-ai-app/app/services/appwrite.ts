@@ -148,6 +148,51 @@ export const DatabaseService = {
         }
     },
 
+    updateProfile: async (userId: string, updates: {
+        name?: string;
+        bio?: string;
+        avatarUrl?: string;
+    }) => {
+        try {
+            return await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.PROFILES,
+                userId,
+                updates
+            );
+        } catch (error) {
+            console.error('DatabaseService :: updateProfile :: error', error);
+            throw error;
+        }
+    },
+
+    uploadProfilePicture: async (imageUri: string) => {
+        try {
+            // Convert uri to file object
+            const response = await fetch(imageUri);
+            const blob = await response.blob();
+            const file = {
+                uri: imageUri,
+                name: `profile-${Date.now()}.jpg`,
+                type: 'image/jpeg',
+                size: blob.size,
+            };
+
+            // Upload to storage
+            const uploadedFile = await storage.createFile(
+                STORAGE_ID,
+                ID.unique(),
+                file
+            );
+
+            // Return the file URL
+            return `${APPWRITE_ENDPOINT}/storage/buckets/${STORAGE_ID}/files/${uploadedFile.$id}/view?project=${APPWRITE_PROJECT_ID}`;
+        } catch (error) {
+            console.error('DatabaseService :: uploadProfilePicture :: error', error);
+            throw error;
+        }
+    },
+
     // Video Methods
     getVideos: async (limit: number = 10, lastId?: string) => {
         try {
