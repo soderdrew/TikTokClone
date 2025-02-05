@@ -74,6 +74,9 @@ export default function HomeScreen() {
             }
             setCurrentUserId(user.$id);
 
+            // Update thumbnails for videos that don't have them
+            await DatabaseService.updateAllVideoThumbnails();
+
             console.log('Fetching videos...');
             const response = await DatabaseService.getVideos(10);
             console.log('Videos fetched:', response.documents.length);

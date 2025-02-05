@@ -1,5 +1,6 @@
 import { Client, Account, ID, Models, Databases, Query, Storage } from 'react-native-appwrite';
 import Constants from 'expo-constants';
+import * as VideoThumbnails from 'expo-video-thumbnails';
 
 const APPWRITE_ENDPOINT = Constants.expoConfig?.extra?.APPWRITE_ENDPOINT as string;
 const APPWRITE_PROJECT_ID = Constants.expoConfig?.extra?.APPWRITE_PROJECT_ID as string;
@@ -627,19 +628,118 @@ export const DatabaseService = {
             console.error('DatabaseService :: getLikedVideos :: error', error);
             throw error;
         }
+    },
+
+    updateAllVideoThumbnails: async () => {
+        try {
+            // Get all videos with example.com thumbnails
+            const videos = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                [
+                    Query.or([
+                        Query.equal('thumbnailUrl', 'https://example.com/thumb1.jpg'),
+                        Query.equal('thumbnailUrl', 'https://example.com/thumb2.jpg'),
+                        Query.equal('thumbnailUrl', 'https://example.com/thumb3.jpg')
+                    ])
+                ]
+            );
+
+            console.log('Found videos to update thumbnails:', videos.documents.length);
+
+            // Generate thumbnails for each video
+            for (const video of videos.documents) {
+                try {
+                    // Get video file ID from videoUrl
+                    const videoId = video.videoUrl.split('/files/')[1].split('/view')[0];
+                    
+                    // Generate and upload thumbnail
+                    const thumbnailUrl = await StorageService.generateThumbnailForExistingVideo(videoId);
+
+                    // Update video document with thumbnail URL
+                    await databases.updateDocument(
+                        DATABASE_ID,
+                        COLLECTIONS.VIDEOS,
+                        video.$id,
+                        {
+                            thumbnailUrl: thumbnailUrl
+                        }
+                    );
+
+                    console.log(`Updated thumbnail for video: ${video.$id}`);
+                } catch (error) {
+                    console.error(`Error updating thumbnail for video ${video.$id}:`, error);
+                    // Continue with next video even if one fails
+                    continue;
+                }
+            }
+        } catch (error) {
+            console.error('Error updating video thumbnails:', error);
+            throw error;
+        }
     }
 };
 
 // Storage service
 export const StorageService = {
+    generateThumbnail: async (videoUrl: string) => {
+        try {
+            const { uri } = await VideoThumbnails.getThumbnailAsync(videoUrl, {
+                time: 0, // Get thumbnail from first frame
+                quality: 0.5, // Medium quality
+            });
+            return uri;
+        } catch (error) {
+            console.error('Error generating thumbnail:', error);
+            throw error;
+        }
+    },
+
+    uploadThumbnail: async (thumbnailUri: string) => {
+        try {
+            // Convert uri to file object
+            const response = await fetch(thumbnailUri);
+            const blob = await response.blob();
+            const file = {
+                uri: thumbnailUri,
+                name: `thumbnail-${Date.now()}.png`,
+                type: 'image/png',
+                size: blob.size,
+            };
+
+            const uploadedFile = await storage.createFile(
+                STORAGE_ID, // Use the same storage bucket as videos
+                ID.unique(),
+                file
+            );
+
+            return uploadedFile;
+        } catch (error) {
+            console.error('Error uploading thumbnail:', error);
+            throw error;
+        }
+    },
+
     uploadVideo: async (file: { uri: string; name: string; type: string; size: number }) => {
         try {
-            const response = await storage.createFile(
+            // Upload the video first
+            const videoFile = await storage.createFile(
                 STORAGE_ID,
                 ID.unique(),
                 file
             );
-            return response;
+
+            // Generate and upload thumbnail
+            const videoUrl = StorageService.getVideoUrl(videoFile.$id);
+            const thumbnailUri = await StorageService.generateThumbnail(videoUrl);
+            const thumbnailFile = await StorageService.uploadThumbnail(thumbnailUri);
+
+            return {
+                videoFile,
+                thumbnailFile,
+                videoUrl,
+                thumbnailUrl: StorageService.getVideoUrl(thumbnailFile.$id)
+            };
         } catch (error) {
             console.error('StorageService :: uploadVideo :: error', error);
             throw error;
@@ -655,6 +755,20 @@ export const StorageService = {
             await storage.deleteFile(STORAGE_ID, fileId);
         } catch (error) {
             console.error('StorageService :: deleteVideo :: error', error);
+            throw error;
+        }
+    },
+
+    generateThumbnailForExistingVideo: async (videoId: string) => {
+        try {
+            const videoUrl = StorageService.getVideoUrl(videoId);
+            const thumbnailUri = await StorageService.generateThumbnail(videoUrl);
+            const thumbnailFile = await StorageService.uploadThumbnail(thumbnailUri);
+            
+            // Return the thumbnail URL
+            return StorageService.getVideoUrl(thumbnailFile.$id);
+        } catch (error) {
+            console.error('Error generating thumbnail for existing video:', error);
             throw error;
         }
     }
