@@ -31,11 +31,12 @@ interface VideoCardProps {
         name: string;
         avatarUrl?: string;
     };
-    onLike?: () => void;
-    onComment?: () => void;
-    onSave?: () => void;
     isLiked?: boolean;
-    isBookmarked?: boolean;
+    isSaved?: boolean;
+    variant?: 'profile' | 'home';
+    onLike: () => void;
+    onComment: () => void;
+    onSave: () => void;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -43,11 +44,12 @@ const { width, height } = Dimensions.get('window');
 export const VideoCard: React.FC<VideoCardProps> = ({
     video,
     creator,
+    isLiked = false,
+    isSaved = false,
+    variant = 'home',
     onLike,
     onComment,
-    onSave,
-    isLiked = false,
-    isBookmarked = false
+    onSave
 }) => {
     const [isPlaying, setIsPlaying] = useState(false);
 
@@ -81,7 +83,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </TouchableOpacity>
 
             {/* Right side interaction buttons */}
-            <View style={styles.actions}>
+            <View style={[
+                styles.actions,
+                variant === 'profile' && styles.actionsProfile
+            ]}>
                 <TouchableOpacity
                     style={styles.likeButton}
                     onPress={onLike}
@@ -109,7 +114,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                     onPress={onSave}
                 >
                     <Ionicons
-                        name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                        name={isSaved ? 'bookmark' : 'bookmark-outline'}
                         size={26}
                         color="white"
                     />
@@ -130,7 +135,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             </View>
 
             {/* Bottom info section */}
-            <View style={styles.overlay}>
+            <View style={[
+                styles.overlay,
+                variant === 'profile' && styles.overlayProfile
+            ]}>
                 <View style={styles.bottomSection}>
                     <View style={styles.creatorInfo}>
                         {creator.avatarUrl ? (
@@ -191,18 +199,24 @@ const styles = StyleSheet.create({
         left: '50%',
         transform: [{ translateX: -40 }, { translateY: -40 }],
     },
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        justifyContent: 'flex-end',
-        padding: 16,
-        paddingBottom: 90,
-    },
     actions: {
         position: 'absolute',
         right: 8,
         bottom: 180,
         alignItems: 'center',
         gap: 0,
+    },
+    actionsProfile: {
+        bottom: 100,
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'flex-end',
+        padding: 16,
+        paddingBottom: 90,
+    },
+    overlayProfile: {
+        paddingBottom: 20,
     },
     actionButton: {
         alignItems: 'center',

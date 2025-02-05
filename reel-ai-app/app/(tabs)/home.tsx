@@ -40,9 +40,9 @@ export default function HomeScreen() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [likedVideos, setLikedVideos] = useState<Set<string>>(new Set());
-    const [bookmarkedVideos, setBookmarkedVideos] = useState<Set<string>>(new Set());
     const [currentUserId, setCurrentUserId] = useState<string>('');
-  const flatListRef = React.useRef<FlatList>(null);
+    const [savedRecipes, setSavedRecipes] = useState<Set<string>>(new Set());
+    const flatListRef = React.useRef<FlatList>(null);
 
     const checkAuth = async () => {
         const isLoggedIn = await AuthService.isLoggedIn();
@@ -83,7 +83,7 @@ export default function HomeScreen() {
             console.log('Starting to fetch creator profiles and statuses...');
             const creatorProfiles: Record<string, Creator> = {};
             const newLikedVideos = new Set<string>();
-            const newBookmarkedVideos = new Set<string>();
+            const newSavedRecipes = new Set<string>();
 
             for (const video of response.documents) {
                 // Fetch creator profile if not already fetched
@@ -115,7 +115,7 @@ export default function HomeScreen() {
                 try {
                     const isSaved = await DatabaseService.isRecipeSaved(user.$id, video.$id);
                     if (isSaved) {
-                        newBookmarkedVideos.add(video.$id);
+                        newSavedRecipes.add(video.$id);
                     }
                 } catch (error) {
                     console.error('Error checking save status:', error);
@@ -125,7 +125,7 @@ export default function HomeScreen() {
             console.log('All profiles and statuses fetched');
             setCreators(creatorProfiles);
             setLikedVideos(newLikedVideos);
-            setBookmarkedVideos(newBookmarkedVideos);
+            setSavedRecipes(newSavedRecipes);
         } catch (error) {
             console.error('Error loading videos:', error);
             if (error instanceof Error) {
@@ -204,10 +204,10 @@ export default function HomeScreen() {
 
     const handleBookmark = async (video: Video) => {
         try {
-            const isCurrentlyBookmarked = bookmarkedVideos.has(video.$id);
+            const isCurrentlyBookmarked = savedRecipes.has(video.$id);
             
             // Optimistically update UI
-            setBookmarkedVideos(prev => {
+            setSavedRecipes(prev => {
                 const newSet = new Set(prev);
                 if (isCurrentlyBookmarked) {
                     newSet.delete(video.$id);
@@ -242,9 +242,9 @@ export default function HomeScreen() {
         } catch (error) {
             console.error('Error toggling bookmark:', error);
             // Revert optimistic updates on error
-    setBookmarkedVideos(prev => {
+    setSavedRecipes(prev => {
       const newSet = new Set(prev);
-                if (bookmarkedVideos.has(video.$id)) {
+                if (savedRecipes.has(video.$id)) {
                     newSet.add(video.$id);
       } else {
                     newSet.delete(video.$id);
@@ -257,7 +257,7 @@ export default function HomeScreen() {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
+                <ActivityIndicator size="large" color="#ff4444" />
             </View>
         );
     }
@@ -288,15 +288,63 @@ export default function HomeScreen() {
           }
         }}
         ref={flatListRef}
-                renderItem={({ item: video }) => (
+                renderItem={({ item }) => (
                     <VideoCard
-                        video={video}
-                        creator={creators[video.userId] || { name: 'Unknown Creator' }}
-                        onLike={() => handleLike(video)}
-                        onComment={() => handleComment(video)}
-                        onSave={() => handleBookmark(video)}
-                        isLiked={likedVideos.has(video.$id)}
-                        isBookmarked={bookmarkedVideos.has(video.$id)}
+                        key={item.$id}
+                        video={item}
+                        creator={creators[item.userId] || { name: 'Unknown Creator' }}
+                        isLiked={likedVideos.has(item.$id)}
+                        isSaved={savedRecipes.has(item.$id)}
+                        onLike={async () => {
+                            if (!currentUserId) {
+                                router.push('/auth/login');
+                                return;
+                            }
+                            try {
+                                if (likedVideos.has(item.$id)) {
+                                    await DatabaseService.unlikeVideo(currentUserId, item.$id);
+                                    setLikedVideos(prev => {
+                                        const next = new Set(prev);
+                                        next.delete(item.$id);
+                                        return next;
+                                    });
+                                } else {
+                                    await DatabaseService.likeVideo(currentUserId, item.$id);
+                                    setLikedVideos(prev => new Set(prev).add(item.$id));
+                                }
+                                loadVideos();
+                            } catch (error) {
+                                console.error('Error toggling like:', error);
+                            }
+                        }}
+                        onComment={() => {
+                            if (!currentUserId) {
+                                router.push('/auth/login');
+                                return;
+                            }
+                        }}
+                        onSave={async () => {
+                            if (!currentUserId) {
+                                router.push('/auth/login');
+                                return;
+                            }
+                            try {
+                                if (savedRecipes.has(item.$id)) {
+                                    await DatabaseService.unsaveRecipe(currentUserId, item.$id);
+                                    setSavedRecipes(prev => {
+                                        const next = new Set(prev);
+                                        next.delete(item.$id);
+                                        return next;
+                                    });
+                                } else {
+                                    await DatabaseService.saveRecipe(currentUserId, item.$id);
+                                    setSavedRecipes(prev => new Set(prev).add(item.$id));
+                                }
+                                loadVideos();
+                            } catch (error) {
+                                console.error('Error toggling save:', error);
+                            }
+                        }}
                     />
                 )}
                 keyExtractor={item => item.$id}

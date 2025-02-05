@@ -561,7 +561,8 @@ export const DatabaseService = {
 
     getSavedRecipes: async (userId: string, limit: number = 10) => {
         try {
-            return await databases.listDocuments(
+            // First get the saved video IDs
+            const saved = await databases.listDocuments(
                 DATABASE_ID,
                 COLLECTIONS.SAVED_RECIPES,
                 [
@@ -570,8 +571,60 @@ export const DatabaseService = {
                     Query.limit(limit)
                 ]
             );
+
+            // Then fetch the actual videos
+            const videoIds = saved.documents.map(save => save.videoId);
+            if (videoIds.length === 0) return { documents: [] };
+
+            // If there's only one video, use a simple equal query
+            const queries = videoIds.length === 1 
+                ? [Query.equal('$id', videoIds[0])]
+                : [Query.or(videoIds.map(id => Query.equal('$id', id)))];
+
+            const videos = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                [...queries, Query.limit(limit)]
+            );
+
+            return videos;
         } catch (error) {
             console.error('DatabaseService :: getSavedRecipes :: error', error);
+            throw error;
+        }
+    },
+
+    getLikedVideos: async (userId: string, limit: number = 10) => {
+        try {
+            // First get the liked video IDs
+            const likes = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.LIKES,
+                [
+                    Query.equal('userId', userId),
+                    Query.orderDesc('createdAt'),
+                    Query.limit(limit)
+                ]
+            );
+
+            // Then fetch the actual videos
+            const videoIds = likes.documents.map(like => like.videoId);
+            if (videoIds.length === 0) return { documents: [] };
+
+            // If there's only one video, use a simple equal query
+            const queries = videoIds.length === 1 
+                ? [Query.equal('$id', videoIds[0])]
+                : [Query.or(videoIds.map(id => Query.equal('$id', id)))];
+
+            const videos = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                [...queries, Query.limit(limit)]
+            );
+
+            return videos;
+        } catch (error) {
+            console.error('DatabaseService :: getLikedVideos :: error', error);
             throw error;
         }
     }
