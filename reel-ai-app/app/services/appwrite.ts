@@ -1,5 +1,8 @@
-import { Client, Account, ID, Models, Databases, Query } from 'react-native-appwrite';
-import { APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID } from '@env';
+import { Client, Account, ID, Models, Databases, Query, Storage } from 'react-native-appwrite';
+import Constants from 'expo-constants';
+
+const APPWRITE_ENDPOINT = Constants.expoConfig?.extra?.APPWRITE_ENDPOINT as string;
+const APPWRITE_PROJECT_ID = Constants.expoConfig?.extra?.APPWRITE_PROJECT_ID as string;
 
 // Initialize Appwrite Client
 const client = new Client();
@@ -11,9 +14,11 @@ client
 // Initialize Appwrite Account and Database
 const account = new Account(client);
 const databases = new Databases(client);
+const storage = new Storage(client);
 
 // Database IDs - we'll create these in Appwrite Console
 const DATABASE_ID = 'reel-ai-main';
+const STORAGE_ID = 'recipe-videos';
 const COLLECTIONS = {
     PROFILES: 'profiles',
     VIDEOS: 'videos',
@@ -456,4 +461,34 @@ export const DatabaseService = {
     }
 };
 
-export { client, account, databases }; 
+// Storage service
+export const StorageService = {
+    uploadVideo: async (file: { uri: string; name: string; type: string; size: number }) => {
+        try {
+            const response = await storage.createFile(
+                STORAGE_ID,
+                ID.unique(),
+                file
+            );
+            return response;
+        } catch (error) {
+            console.error('StorageService :: uploadVideo :: error', error);
+            throw error;
+        }
+    },
+
+    getVideoUrl: (fileId: string) => {
+        return `${APPWRITE_ENDPOINT}/storage/buckets/${STORAGE_ID}/files/${fileId}/view?project=${APPWRITE_PROJECT_ID}&mode=admin`;
+    },
+
+    deleteVideo: async (fileId: string) => {
+        try {
+            await storage.deleteFile(STORAGE_ID, fileId);
+        } catch (error) {
+            console.error('StorageService :: deleteVideo :: error', error);
+            throw error;
+        }
+    }
+};
+
+export { client, account, databases, storage }; 

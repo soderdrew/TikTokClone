@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { DatabaseService } from '../services/appwrite';
+import CommentButton from './interactions/CommentButton';
 
 interface VideoCardProps {
     video: {
@@ -25,6 +25,7 @@ interface VideoCardProps {
         cookingTime: number;
         likesCount: number;
         commentsCount: number;
+        bookmarksCount?: number;
     };
     creator: {
         name: string;
@@ -33,6 +34,8 @@ interface VideoCardProps {
     onLike?: () => void;
     onComment?: () => void;
     onSave?: () => void;
+    isLiked?: boolean;
+    isBookmarked?: boolean;
 }
 
 const { width, height } = Dimensions.get('window');
@@ -42,42 +45,15 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     creator,
     onLike,
     onComment,
-    onSave
+    onSave,
+    isLiked = false,
+    isBookmarked = false
 }) => {
-    const [isLiked, setIsLiked] = useState(false);
-    const [isSaved, setIsSaved] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
 
     const player = useVideoPlayer(video.videoUrl, player => {
         player.loop = true;
     });
-
-    const handleLike = async () => {
-        try {
-            if (isLiked) {
-                await DatabaseService.unlikeVideo(video.userId, video.$id);
-            } else {
-                await DatabaseService.likeVideo(video.userId, video.$id);
-            }
-            setIsLiked(!isLiked);
-            if (onLike) onLike();
-        } catch (error) {
-            console.error('Error toggling like:', error);
-        }
-    };
-
-    const handleSave = async () => {
-        try {
-            if (isSaved) {
-                await DatabaseService.unsaveRecipe(video.userId, video.$id);
-            } else {
-                await DatabaseService.saveRecipe(video.userId, video.$id);
-            }
-            setIsSaved(!isSaved);
-            if (onSave) onSave();
-        } catch (error) {
-            console.error('Error toggling save:', error);
-        }
-    };
 
     const togglePlay = () => {
         if (player.playing) {
@@ -85,6 +61,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         } else {
             player.play();
         }
+        setIsPlaying(!isPlaying);
     };
 
     return (
@@ -96,82 +73,93 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                     contentFit="cover"
                     nativeControls={false}
                 />
-                {!player.playing && (
+                {!isPlaying && (
                     <View style={styles.playButton}>
                         <Ionicons name="play" size={50} color="white" />
                     </View>
                 )}
             </TouchableOpacity>
 
-            <View style={styles.overlay}>
-                <View style={styles.creatorInfo}>
-                    {creator.avatarUrl ? (
-                        <Image
-                            source={{ uri: creator.avatarUrl }}
-                            style={styles.avatar}
-                        />
-                    ) : (
-                        <View style={styles.avatarPlaceholder}>
-                            <Text style={styles.avatarText}>
-                                {creator.name[0]}
-                            </Text>
-                        </View>
-                    )}
-                    <Text style={styles.creatorName}>{creator.name}</Text>
-                </View>
-
-                <View style={styles.videoInfo}>
-                    <Text style={styles.title}>{video.title}</Text>
-                    <Text style={styles.description} numberOfLines={2}>
-                        {video.description}
+            {/* Right side interaction buttons */}
+            <View style={styles.actions}>
+                <TouchableOpacity
+                    style={styles.likeButton}
+                    onPress={onLike}
+                >
+                    <Ionicons
+                        name={isLiked ? 'heart' : 'heart-outline'}
+                        size={28}
+                        color={isLiked ? '#ff4444' : 'white'}
+                    />
+                    <Text style={styles.actionText}>
+                        {video.likesCount || 0}
                     </Text>
-                    <View style={styles.stats}>
-                        <Text style={styles.stat}>
-                            {video.cookingTime} mins • {video.difficulty}
-                        </Text>
-                        <Text style={styles.stat}>{video.cuisine}</Text>
-                    </View>
+                </TouchableOpacity>
+
+                <View style={styles.actionButton}>
+                    <CommentButton
+                        comments={video.commentsCount}
+                        onPress={() => onComment?.()}
+                        videoId={video.$id}
+                    />
                 </View>
 
-                <View style={styles.actions}>
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={handleLike}
-                    >
-                        <Ionicons
-                            name={isLiked ? 'heart' : 'heart-outline'}
-                            size={28}
-                            color={isLiked ? '#ff4444' : 'white'}
-                        />
-                        <Text style={styles.actionText}>
-                            {video.likesCount}
-                        </Text>
-                    </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={onSave}
+                >
+                    <Ionicons
+                        name={isBookmarked ? 'bookmark' : 'bookmark-outline'}
+                        size={26}
+                        color="white"
+                    />
+                    <Text style={styles.actionText}>
+                        {video.bookmarksCount || 0}
+                    </Text>
+                </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={onComment}
-                    >
-                        <Ionicons
-                            name="chatbubble-outline"
-                            size={26}
-                            color="white"
-                        />
-                        <Text style={styles.actionText}>
-                            {video.commentsCount}
-                        </Text>
-                    </TouchableOpacity>
+                <TouchableOpacity
+                    style={styles.actionButton}
+                >
+                    <Ionicons
+                        name="share-social-outline"
+                        size={26}
+                        color="white"
+                    />
+                </TouchableOpacity>
+            </View>
 
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={handleSave}
-                    >
-                        <Ionicons
-                            name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                            size={26}
-                            color="white"
-                        />
-                    </TouchableOpacity>
+            {/* Bottom info section */}
+            <View style={styles.overlay}>
+                <View style={styles.bottomSection}>
+                    <View style={styles.creatorInfo}>
+                        {creator.avatarUrl ? (
+                            <Image
+                                source={{ uri: creator.avatarUrl }}
+                                style={styles.avatar}
+                            />
+                        ) : (
+                            <View style={styles.avatarPlaceholder}>
+                                <Text style={styles.avatarText}>
+                                    {creator.name[0]}
+                                </Text>
+                            </View>
+                        )}
+                        <Text style={styles.creatorName}>@{creator.name}</Text>
+                    </View>
+
+                    <View style={styles.videoInfo}>
+                        <Text style={styles.title}>{video.title}</Text>
+                        <Text style={styles.description} numberOfLines={2}>
+                            {video.description}
+                        </Text>
+                        <View style={styles.stats}>
+                            <Text style={styles.stat}>
+                                {video.cookingTime} mins • {video.difficulty}
+                            </Text>
+                            <Text style={styles.stat}>{video.cuisine}</Text>
+                        </View>
+                    </View>
                 </View>
             </View>
         </View>
@@ -180,99 +168,128 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
 const styles = StyleSheet.create({
     container: {
-        width,
-        height: height - 49, // Subtract tab bar height
-        backgroundColor: '#000',
+        flex: 1,
+        height: height,
+        backgroundColor: 'transparent',
     },
     videoContainer: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+        backgroundColor: 'black',
     },
     video: {
-        width: '100%',
-        height: '100%',
+        flex: 1,
     },
     playButton: {
         position: 'absolute',
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 80,
+        height: 80,
         borderRadius: 40,
-        padding: 15,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        top: '50%',
+        left: '50%',
+        transform: [{ translateX: -40 }, { translateY: -40 }],
     },
     overlay: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: 20,
-        paddingBottom: 40,
-        backgroundColor: 'rgba(0,0,0,0.3)',
-    },
-    creatorInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 15,
-    },
-    avatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        marginRight: 10,
-    },
-    avatarPlaceholder: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#666',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 10,
-    },
-    avatarText: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    creatorName: {
-        color: 'white',
-        fontSize: 16,
-        fontWeight: 'bold',
-    },
-    videoInfo: {
-        marginBottom: 15,
-    },
-    title: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: 'bold',
-        marginBottom: 5,
-    },
-    description: {
-        color: '#eee',
-        fontSize: 14,
-        marginBottom: 8,
-    },
-    stats: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    stat: {
-        color: '#ddd',
-        fontSize: 12,
-        marginRight: 15,
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'flex-end',
+        padding: 16,
+        paddingBottom: 90,
     },
     actions: {
-        flexDirection: 'row',
+        position: 'absolute',
+        right: 8,
+        bottom: 180,
         alignItems: 'center',
-        justifyContent: 'flex-end',
+        gap: 0,
     },
     actionButton: {
         alignItems: 'center',
-        marginLeft: 20,
+        marginBottom: 0,
+        height: 45,
+        justifyContent: 'center',
     },
     actionText: {
         color: 'white',
         fontSize: 12,
         marginTop: 2,
+    },
+    likeButton: {
+        alignItems: 'center',
+        height: 45,
+        justifyContent: 'center',
+        marginBottom: 20,
+    },
+    bottomSection: {
+        marginBottom: 0,
+        paddingBottom: 16,
+    },
+    creatorInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    avatar: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        marginRight: 8,
+    },
+    avatarPlaceholder: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#666',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 8,
+    },
+    avatarText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+    },
+    creatorName: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '600',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+    },
+    videoInfo: {
+        maxWidth: '75%',
+    },
+    title: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginBottom: 4,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+    },
+    description: {
+        color: 'white',
+        fontSize: 14,
+        marginBottom: 8,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
+    },
+    stats: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    stat: {
+        color: 'rgba(255, 255, 255, 0.8)',
+        fontSize: 12,
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 10,
     },
 }); 

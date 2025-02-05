@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
+import { VideoCard } from '../components/VideoCard';
 import InteractionButton from '../components/common/InteractionButton';
 import LikeButton from '../components/interactions/LikeButton';
 import CommentButton from '../components/interactions/CommentButton';
@@ -13,7 +14,7 @@ import { useRouter } from 'expo-router';
 const { width, height } = Dimensions.get('window');
 
 interface Video extends Models.Document {
-    title: string;
+  title: string;
     description: string;
     videoUrl: string;
     thumbnailUrl: string;
@@ -41,7 +42,7 @@ export default function HomeScreen() {
     const [likedVideos, setLikedVideos] = useState<Set<string>>(new Set());
     const [bookmarkedVideos, setBookmarkedVideos] = useState<Set<string>>(new Set());
     const [currentUserId, setCurrentUserId] = useState<string>('');
-    const flatListRef = React.useRef<FlatList>(null);
+  const flatListRef = React.useRef<FlatList>(null);
 
     const checkAuth = async () => {
         const isLoggedIn = await AuthService.isLoggedIn();
@@ -58,22 +59,28 @@ export default function HomeScreen() {
     };
 
     const loadVideos = async () => {
+        console.log('Starting to load videos...');
         try {
             const isAuthenticated = await checkAuth();
+            console.log('Auth check completed:', isAuthenticated);
             if (!isAuthenticated) return;
 
             // Get current user ID first
             const user = await AuthService.getCurrentUser();
+            console.log('Current user fetched:', user ? 'success' : 'failed');
             if (!user) {
                 console.error('No user found');
                 return;
             }
             setCurrentUserId(user.$id);
 
+            console.log('Fetching videos...');
             const response = await DatabaseService.getVideos(10);
+            console.log('Videos fetched:', response.documents.length);
             setVideos(response.documents as Video[]);
 
             // Fetch creator profiles and like statuses
+            console.log('Starting to fetch creator profiles and statuses...');
             const creatorProfiles: Record<string, Creator> = {};
             const newLikedVideos = new Set<string>();
             const newBookmarkedVideos = new Set<string>();
@@ -82,6 +89,7 @@ export default function HomeScreen() {
                 // Fetch creator profile if not already fetched
                 if (!creatorProfiles[video.userId]) {
                     try {
+                        console.log('Fetching profile for user:', video.userId);
                         const profile = await DatabaseService.getProfile(video.userId);
                         creatorProfiles[video.userId] = {
                             name: profile.name,
@@ -114,15 +122,20 @@ export default function HomeScreen() {
                 }
             }
 
+            console.log('All profiles and statuses fetched');
             setCreators(creatorProfiles);
             setLikedVideos(newLikedVideos);
             setBookmarkedVideos(newBookmarkedVideos);
         } catch (error) {
             console.error('Error loading videos:', error);
-            if (error instanceof Error && error.message.includes('not authorized')) {
-                router.replace('/auth/login');
+            if (error instanceof Error) {
+                console.error('Error details:', error.message);
+                if (error.message.includes('not authorized')) {
+                    router.replace('/auth/login');
+                }
             }
         } finally {
+            console.log('Load videos completed');
             setLoading(false);
             setRefreshing(false);
         }
@@ -172,19 +185,20 @@ export default function HomeScreen() {
         } catch (error) {
             console.error('Error toggling like:', error);
             // Revert optimistic updates on error
-            setLikedVideos(prev => {
-                const newSet = new Set(prev);
+    setLikedVideos(prev => {
+      const newSet = new Set(prev);
                 if (likedVideos.has(video.$id)) {
                     newSet.add(video.$id);
-                } else {
+      } else {
                     newSet.delete(video.$id);
-                }
-                return newSet;
-            });
+      }
+      return newSet;
+    });
         }
     };
 
     const handleComment = (video: Video) => {
+        // The CommentButton component will handle showing the modal
         console.log('Comment pressed for video:', video.$id);
     };
 
@@ -228,15 +242,15 @@ export default function HomeScreen() {
         } catch (error) {
             console.error('Error toggling bookmark:', error);
             // Revert optimistic updates on error
-            setBookmarkedVideos(prev => {
-                const newSet = new Set(prev);
+    setBookmarkedVideos(prev => {
+      const newSet = new Set(prev);
                 if (bookmarkedVideos.has(video.$id)) {
                     newSet.add(video.$id);
-                } else {
+      } else {
                     newSet.delete(video.$id);
-                }
-                return newSet;
-            });
+      }
+      return newSet;
+    });
         }
     };
 
@@ -248,141 +262,112 @@ export default function HomeScreen() {
         );
     }
 
-    return (
-        <View style={styles.container}>
-            <FlatList
+  return (
+    <View style={styles.container}>
+      <FlatList
                 data={videos}
-                snapToInterval={height}
-                decelerationRate="fast"
-                bounces={false}
-                showsVerticalScrollIndicator={false}
-                snapToAlignment="start"
-                viewabilityConfig={{
-                    itemVisiblePercentThreshold: 50
-                }}
+        snapToInterval={height}
+        decelerationRate="fast"
+        bounces={false}
+        showsVerticalScrollIndicator={false}
+        snapToAlignment="start"
+        viewabilityConfig={{
+          itemVisiblePercentThreshold: 50
+        }}
                 onRefresh={loadVideos}
                 refreshing={refreshing}
-                onMomentumScrollEnd={(event) => {
-                    const y = event.nativeEvent.contentOffset.y;
+        onMomentumScrollEnd={(event) => {
+          const y = event.nativeEvent.contentOffset.y;
                     const maxScroll = (videos.length - 1) * height;
-                    
-                    if (y > maxScroll) {
-                        flatListRef.current?.scrollToOffset({
-                            offset: maxScroll,
-                            animated: true
-                        });
-                    }
-                }}
-                ref={flatListRef}
+          
+          if (y > maxScroll) {
+            flatListRef.current?.scrollToOffset({
+              offset: maxScroll,
+              animated: true
+            });
+          }
+        }}
+        ref={flatListRef}
                 renderItem={({ item: video }) => (
-                    <View style={styles.videoContainer}>
-                        <View style={styles.videoPlaceholder}>
-                            <Text style={styles.videoTitle}>{video.title}</Text>
-                        </View>
-                        <View style={styles.interactions}>
-                            <LikeButton
-                                isLiked={likedVideos.has(video.$id)}
-                                likes={video.likesCount}
-                                onPress={() => handleLike(video)}
-                            />
-                            <CommentButton
-                                comments={video.commentsCount}
-                                onPress={() => handleComment(video)}
-                                videoId={video.$id}
-                            />
-                            <BookmarkButton
-                                isBookmarked={bookmarkedVideos.has(video.$id)}
-                                bookmarks={video.bookmarksCount || 0}
-                                onPress={() => handleBookmark(video)}
-                            />
-                            <ShareButton
-                                videoId={video.$id}
-                                title={video.title}
-                                onPress={() => console.log('Shared video:', video.$id)}
-                            />
-                            <InteractionButton
-                                icon="restaurant-outline"
-                                text="Recipe"
-                                style={styles.recipeButton}
-                            />
-                        </View>
-                        <View style={styles.videoInfo}>
-                            <Text style={styles.username}>
-                                @{creators[video.userId]?.name || 'Unknown Creator'}
-                            </Text>
-                            <Text style={styles.description}>{video.description}</Text>
-                        </View>
-                    </View>
+                    <VideoCard
+                        video={video}
+                        creator={creators[video.userId] || { name: 'Unknown Creator' }}
+                        onLike={() => handleLike(video)}
+                        onComment={() => handleComment(video)}
+                        onSave={() => handleBookmark(video)}
+                        isLiked={likedVideos.has(video.$id)}
+                        isBookmarked={bookmarkedVideos.has(video.$id)}
+                    />
                 )}
                 keyExtractor={item => item.$id}
-            />
-        </View>
-    );
+      />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#000',
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: '#000',
-    },
-    videoContainer: {
-        height: height,
-        justifyContent: 'center',
-        alignItems: 'center',
-        position: 'relative',
-    },
-    videoPlaceholder: {
-        width: width,
-        height: height,
-        backgroundColor: '#333',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    videoTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    interactions: {
-        position: 'absolute',
-        right: 10,
-        bottom: 100,
-    },
-    interactionItem: {
-        alignItems: 'center',
-        marginBottom: 20,
-    },
-    interactionText: {
-        color: 'white',
-        marginTop: 5,
-        fontSize: 12,
-    },
-    recipeButton: {
-        backgroundColor: '#007AFF',
-        borderRadius: 25,
-        padding: 10,
-        marginTop: 10,
-    },
-    videoInfo: {
-        position: 'absolute',
-        left: 10,
-        bottom: 100,
-        maxWidth: '70%',
-    },
-    username: {
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: 16,
-        marginBottom: 5,
-    },
-    description: {
-        color: 'white',
-        fontSize: 14,
-    },
+    backgroundColor: '#000',
+  },
+  videoContainer: {
+    height: height,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  videoPlaceholder: {
+    width: width,
+    height: height,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  interactions: {
+    position: 'absolute',
+    right: 10,
+    bottom: 100,
+  },
+  interactionItem: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  interactionText: {
+    color: 'white',
+    marginTop: 5,
+    fontSize: 12,
+  },
+  recipeButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 25,
+    padding: 10,
+    marginTop: 10,
+  },
+  videoInfo: {
+    position: 'absolute',
+    left: 10,
+    bottom: 100,
+    maxWidth: '70%',
+  },
+  username: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  description: {
+    color: 'white',
+    fontSize: 14,
+  },
 }); 
