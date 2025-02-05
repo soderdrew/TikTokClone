@@ -220,6 +220,13 @@
                             "required": true
                         },
                         {
+                            "key": "likesCount",
+                            "type": "integer",
+                            "required": true,
+                            "min": 0,
+                            "default": 0
+                        },
+                        {
                             "key": "createdAt",
                             "type": "datetime",
                             "required": true

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, TextInput, TouchableOpacity, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { Link, router } from 'expo-router';
-import { AuthService } from '../services/appwrite';
+import { AuthService, DatabaseService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 
 export default function SignupScreen() {
@@ -39,7 +39,7 @@ export default function SignupScreen() {
     setIsLoading(true);
     try {
       // Create the account first
-      await AuthService.createAccount(email, password, name);
+      const account = await AuthService.createAccount(email, password, name);
       
       // Then create a session
       await AuthService.login(email, password);
@@ -47,6 +47,11 @@ export default function SignupScreen() {
       // Get the user details
       const currentUser = await AuthService.getCurrentUser();
       setUser(currentUser);
+
+      // Create user profile
+      if (currentUser) {
+        await DatabaseService.createProfile(currentUser.$id, name);
+      }
       
       // Navigate to home
       router.replace('/(tabs)/home');

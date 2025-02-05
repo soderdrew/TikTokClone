@@ -92,13 +92,55 @@ export const AuthService = {
 // Database service
 export const DatabaseService = {
     // Profile Methods
-    getProfile: async (userId: string) => {
+    createProfile: async (userId: string, name: string) => {
         try {
-            return await databases.getDocument(
+            return await databases.createDocument(
                 DATABASE_ID,
                 COLLECTIONS.PROFILES,
-                userId
+                userId, // Use the userId as the document ID
+                {
+                    userId,
+                    name,
+                    bio: '',
+                    avatarUrl: '',
+                    recipesCount: 0,
+                    followersCount: 0,
+                    followingCount: 0
+                }
             );
+        } catch (error) {
+            console.error('DatabaseService :: createProfile :: error', error);
+            throw error;
+        }
+    },
+
+    ensureProfile: async (userId: string) => {
+        try {
+            // Try to get the profile
+            try {
+                return await databases.getDocument(
+                    DATABASE_ID,
+                    COLLECTIONS.PROFILES,
+                    userId
+                );
+            } catch (error) {
+                // If profile doesn't exist, get user details and create one
+                const user = await account.get();
+                if (user) {
+                    return await DatabaseService.createProfile(userId, user.name);
+                }
+                throw new Error('Could not create profile: User not found');
+            }
+        } catch (error) {
+            console.error('DatabaseService :: ensureProfile :: error', error);
+            throw error;
+        }
+    },
+
+    getProfile: async (userId: string) => {
+        try {
+            // Use ensureProfile instead of direct getDocument
+            return await DatabaseService.ensureProfile(userId);
         } catch (error) {
             console.error('DatabaseService :: getProfile :: error', error);
             throw error;
@@ -276,7 +318,7 @@ export const DatabaseService = {
     },
 
     // Comment Methods
-    getVideoComments: async (videoId: string, limit: number = 10) => {
+    getComments: async (videoId: string, limit: number = 20) => {
         try {
             return await databases.listDocuments(
                 DATABASE_ID,
@@ -288,12 +330,12 @@ export const DatabaseService = {
                 ]
             );
         } catch (error) {
-            console.error('DatabaseService :: getVideoComments :: error', error);
+            console.error('DatabaseService :: getComments :: error', error);
             throw error;
         }
     },
 
-    addComment: async (userId: string, videoId: string, content: string) => {
+    addComment: async (userId: string, videoId: string, text: string) => {
         try {
             const response = await databases.createDocument(
                 DATABASE_ID,
@@ -302,7 +344,8 @@ export const DatabaseService = {
                 {
                     userId,
                     videoId,
-                    content,
+                    content: text,
+                    likesCount: 0,
                     createdAt: new Date().toISOString()
                 }
             );
@@ -326,6 +369,79 @@ export const DatabaseService = {
             return response;
         } catch (error) {
             console.error('DatabaseService :: addComment :: error', error);
+            throw error;
+        }
+    },
+
+    deleteComment: async (videoId: string, commentId: string) => {
+        try {
+            await databases.deleteDocument(
+                DATABASE_ID,
+                COLLECTIONS.COMMENTS,
+                commentId
+            );
+
+            // Decrement the commentsCount in the video document
+            const video = await databases.getDocument(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                videoId
+            );
+
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                videoId,
+                {
+                    commentsCount: Math.max(0, (video.commentsCount || 0) - 1)
+                }
+            );
+        } catch (error) {
+            console.error('DatabaseService :: deleteComment :: error', error);
+            throw error;
+        }
+    },
+
+    likeComment: async (userId: string, commentId: string) => {
+        try {
+            const comment = await databases.getDocument(
+                DATABASE_ID,
+                COLLECTIONS.COMMENTS,
+                commentId
+            );
+
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.COMMENTS,
+                commentId,
+                {
+                    likesCount: (comment.likesCount || 0) + 1
+                }
+            );
+        } catch (error) {
+            console.error('DatabaseService :: likeComment :: error', error);
+            throw error;
+        }
+    },
+
+    unlikeComment: async (userId: string, commentId: string) => {
+        try {
+            const comment = await databases.getDocument(
+                DATABASE_ID,
+                COLLECTIONS.COMMENTS,
+                commentId
+            );
+
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.COMMENTS,
+                commentId,
+                {
+                    likesCount: Math.max(0, (comment.likesCount || 0) - 1)
+                }
+            );
+        } catch (error) {
+            console.error('DatabaseService :: unlikeComment :: error', error);
             throw error;
         }
     },
