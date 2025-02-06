@@ -157,7 +157,6 @@ export default function HomeScreen() {
         try {
             const isCurrentlyLiked = likedVideos.has(video.$id);
             
-            // Optimistically update UI
             setLikedVideos(prev => {
                 const newSet = new Set(prev);
                 if (isCurrentlyLiked) {
@@ -168,40 +167,45 @@ export default function HomeScreen() {
                 return newSet;
             });
 
-            // Perform the actual API call
-            if (isCurrentlyLiked) {
-                await DatabaseService.unlikeVideo(currentUserId, video.$id);
-            } else {
-                await DatabaseService.likeVideo(currentUserId, video.$id);
-            }
-
-            // Fetch the updated video data
-            const updatedVideo = await DatabaseService.getVideoById(video.$id);
-            
-            // Update the videos state with the latest data
             setVideos(prev => 
                 prev.map(v => {
                     if (v.$id === video.$id) {
                         return {
                             ...v,
-                            likesCount: updatedVideo.likesCount
+                            likesCount: v.likesCount + (isCurrentlyLiked ? -1 : 1)
                         };
                     }
                     return v;
                 })
             );
+
+            if (isCurrentlyLiked) {
+                await DatabaseService.unlikeVideo(currentUserId, video.$id);
+            } else {
+                await DatabaseService.likeVideo(currentUserId, video.$id);
+            }
         } catch (error) {
             console.error('Error toggling like:', error);
-            // Revert optimistic updates on error
-    setLikedVideos(prev => {
-      const newSet = new Set(prev);
+            setLikedVideos(prev => {
+                const newSet = new Set(prev);
                 if (likedVideos.has(video.$id)) {
                     newSet.add(video.$id);
-      } else {
+                } else {
                     newSet.delete(video.$id);
-      }
-      return newSet;
-    });
+                }
+                return newSet;
+            });
+            setVideos(prev => 
+                prev.map(v => {
+                    if (v.$id === video.$id) {
+                        return {
+                            ...v,
+                            likesCount: v.likesCount + (likedVideos.has(video.$id) ? -1 : 1)
+                        };
+                    }
+                    return v;
+                })
+            );
         }
     };
 
@@ -214,7 +218,6 @@ export default function HomeScreen() {
         try {
             const isCurrentlyBookmarked = savedRecipes.has(video.$id);
             
-            // Optimistically update UI
             setSavedRecipes(prev => {
                 const newSet = new Set(prev);
                 if (isCurrentlyBookmarked) {
@@ -225,40 +228,45 @@ export default function HomeScreen() {
                 return newSet;
             });
 
-            // Perform the actual API call
-            if (isCurrentlyBookmarked) {
-                await DatabaseService.unsaveRecipe(currentUserId, video.$id);
-            } else {
-                await DatabaseService.saveRecipe(currentUserId, video.$id);
-            }
-
-            // Fetch the updated video data
-            const updatedVideo = await DatabaseService.getVideoById(video.$id);
-            
-            // Update the videos state with the latest data
             setVideos(prev => 
                 prev.map(v => {
                     if (v.$id === video.$id) {
                         return {
                             ...v,
-                            bookmarksCount: updatedVideo.bookmarksCount
+                            bookmarksCount: (v.bookmarksCount || 0) + (isCurrentlyBookmarked ? -1 : 1)
                         };
                     }
                     return v;
                 })
             );
+
+            if (isCurrentlyBookmarked) {
+                await DatabaseService.unsaveRecipe(currentUserId, video.$id);
+            } else {
+                await DatabaseService.saveRecipe(currentUserId, video.$id);
+            }
         } catch (error) {
             console.error('Error toggling bookmark:', error);
-            // Revert optimistic updates on error
-    setSavedRecipes(prev => {
-      const newSet = new Set(prev);
+            setSavedRecipes(prev => {
+                const newSet = new Set(prev);
                 if (savedRecipes.has(video.$id)) {
                     newSet.add(video.$id);
-      } else {
+                } else {
                     newSet.delete(video.$id);
-      }
-      return newSet;
-    });
+                }
+                return newSet;
+            });
+            setVideos(prev => 
+                prev.map(v => {
+                    if (v.$id === video.$id) {
+                        return {
+                            ...v,
+                            bookmarksCount: (v.bookmarksCount || 0) + (savedRecipes.has(video.$id) ? -1 : 1)
+                        };
+                    }
+                    return v;
+                })
+            );
         }
     };
 
@@ -303,55 +311,26 @@ export default function HomeScreen() {
                         creator={creators[item.userId] || { name: 'Unknown Creator' }}
                         isLiked={likedVideos.has(item.$id)}
                         isSaved={savedRecipes.has(item.$id)}
-                        onLike={async () => {
+                        onLike={() => {
                             if (!currentUserId) {
                                 router.push('/auth/login');
                                 return;
                             }
-                            try {
-                                if (likedVideos.has(item.$id)) {
-                                    await DatabaseService.unlikeVideo(currentUserId, item.$id);
-                                    setLikedVideos(prev => {
-                                        const next = new Set(prev);
-                                        next.delete(item.$id);
-                                        return next;
-                                    });
-                                } else {
-                                    await DatabaseService.likeVideo(currentUserId, item.$id);
-                                    setLikedVideos(prev => new Set(prev).add(item.$id));
-                                }
-                                loadVideos();
-                            } catch (error) {
-                                console.error('Error toggling like:', error);
-                            }
+                            handleLike(item);
                         }}
                         onComment={() => {
                             if (!currentUserId) {
                                 router.push('/auth/login');
                                 return;
                             }
+                            handleComment(item);
                         }}
-                        onSave={async () => {
+                        onSave={() => {
                             if (!currentUserId) {
                                 router.push('/auth/login');
                                 return;
                             }
-                            try {
-                                if (savedRecipes.has(item.$id)) {
-                                    await DatabaseService.unsaveRecipe(currentUserId, item.$id);
-                                    setSavedRecipes(prev => {
-                                        const next = new Set(prev);
-                                        next.delete(item.$id);
-                                        return next;
-                                    });
-                                } else {
-                                    await DatabaseService.saveRecipe(currentUserId, item.$id);
-                                    setSavedRecipes(prev => new Set(prev).add(item.$id));
-                                }
-                                loadVideos();
-                            } catch (error) {
-                                console.error('Error toggling save:', error);
-                            }
+                            handleBookmark(item);
                         }}
                     />
                 )}
