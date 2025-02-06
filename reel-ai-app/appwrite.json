@@ -441,8 +441,153 @@
             "databaseId": "reel-ai-main",
             "name": "Search History",
             "documentSecurity": false,
-            "attributes": [],
-            "indexes": [],
+            "permissions": [
+                "read(\"users\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "query",
+                    "type": "string",
+                    "size": 100,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "updatedAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "userId",
+                    "type": "key",
+                    "attributes": [
+                        "userId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "user_query_unique",
+                    "type": "unique",
+                    "attributes": [
+                        "userId",
+                        "query"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "updatedAt",
+                    "type": "key",
+                    "attributes": [
+                        "updatedAt"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ],
+            "enabled": true
+        },
+        {
+            "$id": "follows",
+            "databaseId": "reel-ai-main",
+            "name": "Follows",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "followerId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "followedId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "follower_followed",
+                    "type": "unique",
+                    "attributes": [
+                        "followerId",
+                        "followedId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "follower",
+                    "type": "key",
+                    "attributes": [
+                        "followerId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "followed",
+                    "type": "key",
+                    "attributes": [
+                        "followedId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "created_at",
+                    "type": "key",
+                    "attributes": [
+                        "createdAt"
+                    ],
+                    "orders": [
+                        "DESC"
+                    ]
+                }
+            ],
             "enabled": true
         }
     ]

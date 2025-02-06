@@ -5,10 +5,12 @@ import {
     Image,
     StyleSheet,
     TouchableOpacity,
-    Dimensions
+    Dimensions,
+    Share
 } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import CommentButton from './interactions/CommentButton';
 
 interface VideoCardProps {
@@ -30,6 +32,7 @@ interface VideoCardProps {
     creator: {
         name: string;
         avatarUrl?: string;
+        userId: string;
     };
     isLiked?: boolean;
     isSaved?: boolean;
@@ -57,6 +60,31 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         player.loop = true;
     });
 
+    const handleShare = async () => {
+        try {
+            const result = await Share.share({
+                message: `Check out this amazing recipe for ${video.title} by ${creator.name}!`,
+                url: video.videoUrl, // This will work on iOS
+                title: video.title, // This will be the subject on email shares
+            });
+            
+            if (result.action === Share.sharedAction) {
+                if (result.activityType) {
+                    // shared with activity type of result.activityType
+                    console.log('Shared with activity type:', result.activityType);
+                } else {
+                    // shared
+                    console.log('Shared successfully');
+                }
+            } else if (result.action === Share.dismissedAction) {
+                // dismissed
+                console.log('Share dismissed');
+            }
+        } catch (error) {
+            console.error('Error sharing:', error);
+        }
+    };
+
     const togglePlay = () => {
         if (player.playing) {
             player.pause();
@@ -64,6 +92,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             player.play();
         }
         setIsPlaying(!isPlaying);
+    };
+
+    const navigateToProfile = () => {
+        router.push(`/profile/${creator.userId}`);
     };
 
     return (
@@ -125,6 +157,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
                 <TouchableOpacity
                     style={styles.actionButton}
+                    onPress={handleShare}
                 >
                     <Ionicons
                         name="share-social-outline"
@@ -140,7 +173,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 variant === 'profile' && styles.overlayProfile
             ]}>
                 <View style={styles.bottomSection}>
-                    <View style={styles.creatorInfo}>
+                    <TouchableOpacity 
+                        style={styles.creatorInfo}
+                        onPress={navigateToProfile}
+                    >
                         {creator.avatarUrl ? (
                             <Image
                                 source={{ uri: creator.avatarUrl }}
@@ -154,7 +190,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                             </View>
                         )}
                         <Text style={styles.creatorName}>@{creator.name}</Text>
-                    </View>
+                    </TouchableOpacity>
 
                     <View style={styles.videoInfo}>
                         <Text style={styles.title}>{video.title}</Text>
@@ -228,6 +264,9 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 12,
         marginTop: 2,
+        textShadowColor: 'black',
+        textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 1,
     },
     likeButton: {
         alignItems: 'center',
@@ -263,47 +302,48 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 16,
         fontWeight: 'bold',
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
-        textShadowRadius: 10,
+        textShadowRadius: 1,
     },
     creatorName: {
         color: 'white',
         fontSize: 16,
         fontWeight: '600',
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        marginLeft: 8,
+        textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
-        textShadowRadius: 10,
+        textShadowRadius: 1,
     },
     videoInfo: {
         maxWidth: '75%',
     },
     title: {
         color: 'white',
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
-        textShadowRadius: 10,
+        textShadowRadius: 1,
     },
     description: {
         color: 'white',
         fontSize: 14,
         marginBottom: 8,
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
-        textShadowRadius: 10,
+        textShadowRadius: 1,
     },
     stats: {
         flexDirection: 'row',
         gap: 8,
     },
     stat: {
-        color: 'rgba(255, 255, 255, 0.8)',
+        color: 'white',
         fontSize: 12,
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
-        textShadowRadius: 10,
+        textShadowRadius: 1,
     },
 }); 

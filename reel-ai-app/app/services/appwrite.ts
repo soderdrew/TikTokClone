@@ -47,7 +47,8 @@ const COLLECTIONS = {
     LIKES: 'likes',
     COMMENTS: 'comments',
     SAVED_RECIPES: 'saved_recipes',
-    SEARCH_HISTORY: 'search_history'
+    SEARCH_HISTORY: 'search_history',
+    FOLLOWS: 'follows'  // Add follows collection
 };
 
 // Authentication service
@@ -888,6 +889,152 @@ export const DatabaseService = {
         } catch (error) {
             console.error('Error deleting search query:', error);
             throw error;
+        }
+    },
+
+    getUserVideos: async (userId: string) => {
+        return retryOperation(async () => {
+            try {
+                return await databases.listDocuments(
+                    DATABASE_ID,
+                    COLLECTIONS.VIDEOS,
+                    [
+                        Query.equal('userId', userId),
+                        Query.orderDesc('createdAt')
+                    ]
+                );
+            } catch (error) {
+                console.error('Error getting user videos:', error);
+                throw error;
+            }
+        });
+    },
+
+    // Follow Methods
+    followUser: async (followerId: string, followedId: string) => {
+        try {
+            // Check if already following
+            const existingFollow = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.FOLLOWS,
+                [
+                    Query.equal('followerId', followerId),
+                    Query.equal('followedId', followedId),
+                    Query.limit(1)
+                ]
+            );
+
+            if (existingFollow.documents.length > 0) {
+                return existingFollow.documents[0];
+            }
+
+            // Create new follow relationship
+            const response = await databases.createDocument(
+                DATABASE_ID,
+                COLLECTIONS.FOLLOWS,
+                ID.unique(),
+                {
+                    followerId,
+                    followedId,
+                    createdAt: new Date().toISOString()
+                }
+            );
+
+            // Update follower counts
+            const followedProfile = await DatabaseService.getProfile(followedId);
+            const followerProfile = await DatabaseService.getProfile(followerId);
+
+            await Promise.all([
+                databases.updateDocument(
+                    DATABASE_ID,
+                    COLLECTIONS.PROFILES,
+                    followedId,
+                    {
+                        followersCount: (followedProfile.followersCount || 0) + 1
+                    }
+                ),
+                databases.updateDocument(
+                    DATABASE_ID,
+                    COLLECTIONS.PROFILES,
+                    followerId,
+                    {
+                        followingCount: (followerProfile.followingCount || 0) + 1
+                    }
+                )
+            ]);
+
+            return response;
+        } catch (error) {
+            console.error('DatabaseService :: followUser :: error', error);
+            throw error;
+        }
+    },
+
+    unfollowUser: async (followerId: string, followedId: string) => {
+        try {
+            // Find the follow relationship
+            const follows = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.FOLLOWS,
+                [
+                    Query.equal('followerId', followerId),
+                    Query.equal('followedId', followedId),
+                    Query.limit(1)
+                ]
+            );
+
+            if (follows.documents.length > 0) {
+                // Delete the follow relationship
+                await databases.deleteDocument(
+                    DATABASE_ID,
+                    COLLECTIONS.FOLLOWS,
+                    follows.documents[0].$id
+                );
+
+                // Update follower counts
+                const followedProfile = await DatabaseService.getProfile(followedId);
+                const followerProfile = await DatabaseService.getProfile(followerId);
+
+                await Promise.all([
+                    databases.updateDocument(
+                        DATABASE_ID,
+                        COLLECTIONS.PROFILES,
+                        followedId,
+                        {
+                            followersCount: Math.max(0, (followedProfile.followersCount || 0) - 1)
+                        }
+                    ),
+                    databases.updateDocument(
+                        DATABASE_ID,
+                        COLLECTIONS.PROFILES,
+                        followerId,
+                        {
+                            followingCount: Math.max(0, (followerProfile.followingCount || 0) - 1)
+                        }
+                    )
+                ]);
+            }
+        } catch (error) {
+            console.error('DatabaseService :: unfollowUser :: error', error);
+            throw error;
+        }
+    },
+
+    isFollowing: async (followerId: string, followedId: string) => {
+        try {
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.FOLLOWS,
+                [
+                    Query.equal('followerId', followerId),
+                    Query.equal('followedId', followedId),
+                    Query.limit(1)
+                ]
+            );
+            return response.documents.length > 0;
+        } catch (error) {
+            console.error('DatabaseService :: isFollowing :: error', error);
+            return false;
         }
     }
 };

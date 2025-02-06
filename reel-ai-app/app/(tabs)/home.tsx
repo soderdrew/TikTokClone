@@ -31,6 +31,7 @@ interface Video extends Models.Document {
 interface Creator {
     name: string;
     avatarUrl?: string;
+    userId: string;
 }
 
 export default function HomeScreen() {
@@ -96,11 +97,15 @@ export default function HomeScreen() {
                         const profile = await DatabaseService.getProfile(video.userId);
                         creatorProfiles[video.userId] = {
                             name: profile.name,
-                            avatarUrl: profile.avatarUrl
+                            avatarUrl: profile.avatarUrl,
+                            userId: video.userId
                         };
                     } catch (error) {
                         console.error('Error fetching profile:', error);
-                        creatorProfiles[video.userId] = { name: 'Unknown Creator' };
+                        creatorProfiles[video.userId] = { 
+                            name: 'Unknown Creator',
+                            userId: video.userId
+                        };
                     }
                 }
 

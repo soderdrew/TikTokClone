@@ -191,22 +191,19 @@ export default function ProfileScreen() {
 
   const renderVideo = ({ item }: { item: Video }) => (
     <TouchableOpacity 
-      style={styles.videoThumbnail}
-      onPress={() => {
-        router.push({
-          pathname: `/(video)/${item.$id}`,
-          params: { title: item.title }
-        });
-      }}
+      style={styles.videoCard}
+      onPress={() => router.push(`/(video)/${item.$id}`)}
     >
       <Image
-        source={{ uri: item.thumbnailUrl || 'https://via.placeholder.com/150' }}
-        style={styles.thumbnailImage}
+        source={{ uri: item.thumbnailUrl }}
+        style={styles.thumbnail}
       />
       <View style={styles.videoInfo}>
-        <Text style={styles.videoTitle} numberOfLines={1}>{item.title}</Text>
+        <Text style={styles.videoTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
         <Text style={styles.videoStats}>
-          {item.likesCount} likes · {item.commentsCount} comments
+          {item.likesCount || 0} likes • {item.commentsCount || 0} comments
         </Text>
       </View>
     </TouchableOpacity>
@@ -219,6 +216,7 @@ export default function ProfileScreen() {
         renderItem={renderVideo}
         keyExtractor={item => item.$id}
         numColumns={2}
+        columnWrapperStyle={styles.row}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -366,8 +364,9 @@ export default function ProfileScreen() {
 }
 
 const { width } = Dimensions.get('window');
-const THUMBNAIL_SPACING = 1;
-const THUMBNAIL_SIZE = (width - THUMBNAIL_SPACING * 3) / 2;
+const HORIZONTAL_PADDING = 16;
+const CARD_GAP = 12;
+const CARD_WIDTH = (width - (HORIZONTAL_PADDING * 2) - CARD_GAP) / 2;
 
 const styles = StyleSheet.create({
   container: {
@@ -485,38 +484,40 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
-  videoThumbnail: {
-    width: THUMBNAIL_SIZE,
-    height: THUMBNAIL_SIZE,
-    margin: THUMBNAIL_SPACING / 2,
+  row: {
+    flex: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: HORIZONTAL_PADDING,
   },
-  thumbnailImage: {
+  videoCard: {
+    width: CARD_WIDTH,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: CARD_GAP,
+  },
+  thumbnail: {
     width: '100%',
-    height: '100%',
+    height: CARD_WIDTH, // Square aspect ratio
+    backgroundColor: '#333',
   },
   videoInfo: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 10,
   },
   videoTitle: {
-    color: '#fff',
-    fontSize: 12,
+    color: 'white',
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   videoStats: {
-    color: '#888',
-    fontSize: 10,
+    color: '#999',
+    fontSize: 12,
   },
   tabs: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     borderTopWidth: 1,
-    borderBottomWidth: 1,
     borderColor: '#333',
     paddingVertical: 10,
     marginBottom: 1,

@@ -27,7 +27,7 @@ interface Video extends Models.Document {
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams();
   const [video, setVideo] = React.useState<Video | null>(null);
-  const [creator, setCreator] = React.useState<{ name: string; avatarUrl?: string } | null>(null);
+  const [creator, setCreator] = React.useState<{ name: string; avatarUrl?: string; userId: string } | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isLiked, setIsLiked] = React.useState(false);
   const [isSaved, setIsSaved] = React.useState(false);
@@ -58,7 +58,8 @@ export default function VideoDetailScreen() {
         const creatorProfile = await DatabaseService.getProfile(videoData.userId);
         setCreator({
           name: creatorProfile.name,
-          avatarUrl: creatorProfile.avatarUrl
+          avatarUrl: creatorProfile.avatarUrl,
+          userId: videoData.userId
         });
       } else {
         // Just load video and creator if not logged in
@@ -67,7 +68,8 @@ export default function VideoDetailScreen() {
         const creatorProfile = await DatabaseService.getProfile(videoData.userId);
         setCreator({
           name: creatorProfile.name,
-          avatarUrl: creatorProfile.avatarUrl
+          avatarUrl: creatorProfile.avatarUrl,
+          userId: videoData.userId
         });
       }
     } catch (error) {
