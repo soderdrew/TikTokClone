@@ -1,16 +1,37 @@
 import { Client, Account, ID, Models, Databases, Query, Storage } from 'react-native-appwrite';
 import Constants from 'expo-constants';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import { Platform } from 'react-native';
 
 const APPWRITE_ENDPOINT = Constants.expoConfig?.extra?.APPWRITE_ENDPOINT as string;
 const APPWRITE_PROJECT_ID = Constants.expoConfig?.extra?.APPWRITE_PROJECT_ID as string;
 
-// Initialize Appwrite Client
+// Add retry utility function at the top level
+const retryOperation = async (operation: () => Promise<any>, maxRetries = 3, delay = 1000) => {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error: any) {
+            if (i === maxRetries - 1) throw error; // Last attempt, throw the error
+            
+            // Check if it's a network error or 502 Bad Gateway
+            const isNetworkError = error.message?.includes('502') || 
+                                 error.message?.includes('Bad gateway') ||
+                                 error.message?.includes('Network request failed');
+            
+            if (!isNetworkError) throw error; // If not a network error, throw immediately
+            
+            // Wait before retrying
+            await new Promise(resolve => setTimeout(resolve, delay * (i + 1)));
+        }
+    }
+};
+
+// Initialize Appwrite Client with platform-specific settings
 const client = new Client();
 client
     .setEndpoint(APPWRITE_ENDPOINT)
-    .setProject(APPWRITE_PROJECT_ID)
-    .setPlatform('com.soderdrew.reelai'); // Your bundle ID from app.json
+    .setProject(APPWRITE_PROJECT_ID);
 
 // Initialize Appwrite Account and Database
 const account = new Account(client);
@@ -25,7 +46,8 @@ const COLLECTIONS = {
     VIDEOS: 'videos',
     LIKES: 'likes',
     COMMENTS: 'comments',
-    SAVED_RECIPES: 'saved_recipes'
+    SAVED_RECIPES: 'saved_recipes',
+    SEARCH_HISTORY: 'search_history'
 };
 
 // Authentication service
@@ -720,6 +742,151 @@ export const DatabaseService = {
             }
         } catch (error) {
             console.error('Error updating video thumbnails:', error);
+            throw error;
+        }
+    },
+
+    // Recipe Methods
+    getAllRecipes: async () => {
+        return retryOperation(async () => {
+            try {
+                return await databases.listDocuments(
+                    DATABASE_ID,
+                    COLLECTIONS.VIDEOS,
+                    [
+                        Query.orderDesc('$createdAt'),
+                        Query.limit(50)
+                    ]
+                );
+            } catch (error) {
+                console.error('Error getting all recipes:', error);
+                throw error;
+            }
+        });
+    },
+
+    getRecipesByCuisine: async (cuisine: string) => {
+        return retryOperation(async () => {
+            try {
+                return await databases.listDocuments(
+                    DATABASE_ID,
+                    COLLECTIONS.VIDEOS,
+                    [
+                        Query.equal('cuisine', cuisine),
+                        Query.orderDesc('$createdAt'),
+                        Query.limit(50)
+                    ]
+                );
+            } catch (error) {
+                console.error('Error getting recipes by cuisine:', error);
+                throw error;
+            }
+        });
+    },
+
+    // Search History Methods
+    addSearchQuery: async (userId: string, query: string) => {
+        return retryOperation(async () => {
+            try {
+                if (!query.trim()) return;
+
+                const existing = await databases.listDocuments(
+                    DATABASE_ID,
+                    COLLECTIONS.SEARCH_HISTORY,
+                    [
+                        Query.equal('userId', userId),
+                        Query.equal('query', query),
+                        Query.limit(1)
+                    ]
+                );
+
+                if (existing.documents.length > 0) {
+                    return await databases.updateDocument(
+                        DATABASE_ID,
+                        COLLECTIONS.SEARCH_HISTORY,
+                        existing.documents[0].$id,
+                        {
+                            updatedAt: new Date().toISOString()
+                        }
+                    );
+                }
+
+                return await databases.createDocument(
+                    DATABASE_ID,
+                    COLLECTIONS.SEARCH_HISTORY,
+                    ID.unique(),
+                    {
+                        userId,
+                        query,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    }
+                );
+            } catch (error) {
+                console.error('Error adding search query:', error);
+                throw error;
+            }
+        });
+    },
+
+    getSearchHistory: async (userId: string, limit: number = 10, lastId: string | null = null) => {
+        return retryOperation(async () => {
+            try {
+                const queries = [
+                    Query.equal('userId', userId),
+                    Query.orderDesc('updatedAt'),
+                    Query.limit(limit)
+                ];
+
+                if (lastId) {
+                    queries.push(Query.cursorAfter(lastId));
+                }
+
+                return await databases.listDocuments(
+                    DATABASE_ID,
+                    COLLECTIONS.SEARCH_HISTORY,
+                    queries
+                );
+            } catch (error) {
+                console.error('Error getting search history:', error);
+                throw error;
+            }
+        });
+    },
+
+    clearSearchHistory: async (userId: string) => {
+        try {
+            const history = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.SEARCH_HISTORY,
+                [Query.equal('userId', userId)]
+            );
+
+            // Delete each search history entry
+            await Promise.all(
+                history.documents.map(doc =>
+                    databases.deleteDocument(
+                        DATABASE_ID,
+                        COLLECTIONS.SEARCH_HISTORY,
+                        doc.$id
+                    )
+                )
+            );
+        } catch (error) {
+            console.error('Error clearing search history:', error);
+            throw error;
+        }
+    },
+
+    deleteSearchQuery: async (queryId: string) => {
+        try {
+            await databases.deleteDocument(
+                DATABASE_ID,
+                COLLECTIONS.SEARCH_HISTORY,
+                queryId
+            );
+        } catch (error) {
+            console.error('Error deleting search query:', error);
             throw error;
         }
     }

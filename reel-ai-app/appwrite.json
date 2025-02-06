@@ -414,16 +414,35 @@
                 {
                     "key": "user_video_unique",
                     "type": "unique",
-                    "attributes": ["userId", "videoId"],
-                    "orders": ["ASC", "ASC"]
+                    "attributes": [
+                        "userId",
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
                 },
                 {
                     "key": "userId",
                     "type": "key",
-                    "attributes": ["userId"],
-                    "orders": ["ASC"]
+                    "attributes": [
+                        "userId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
                 }
             ],
+            "enabled": true
+        },
+        {
+            "$id": "search_history",
+            "databaseId": "reel-ai-main",
+            "name": "Search History",
+            "documentSecurity": false,
+            "attributes": [],
+            "indexes": [],
             "enabled": true
         }
     ]

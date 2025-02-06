@@ -1,7 +1,7 @@
 {
     "databases": [
         {
-            "$id": "reelai-main",
+            "$id": "reel-ai-main",
             "name": "ReelAI Main Database",
             "collections": [
                 {
@@ -278,6 +278,52 @@
                             "key": "userId",
                             "type": "key",
                             "attributes": ["userId"]
+                        }
+                    ]
+                },
+                {
+                    "$id": "search_history",
+                    "name": "Search History",
+                    "permissions": ["read(\"users\")", "create(\"users\")", "update(\"users\")", "delete(\"users\")"],
+                    "attributes": [
+                        {
+                            "key": "userId",
+                            "type": "string",
+                            "size": 36,
+                            "required": true
+                        },
+                        {
+                            "key": "query",
+                            "type": "string",
+                            "size": 100,
+                            "required": true
+                        },
+                        {
+                            "key": "createdAt",
+                            "type": "datetime",
+                            "required": true
+                        },
+                        {
+                            "key": "updatedAt",
+                            "type": "datetime",
+                            "required": true
+                        }
+                    ],
+                    "indexes": [
+                        {
+                            "key": "userId",
+                            "type": "key",
+                            "attributes": ["userId"]
+                        },
+                        {
+                            "key": "user_query_unique",
+                            "type": "unique",
+                            "attributes": ["userId", "query"]
+                        },
+                        {
+                            "key": "updatedAt",
+                            "type": "key",
+                            "attributes": ["updatedAt"]
                         }
                     ]
                 }
