@@ -280,6 +280,9 @@ export const DatabaseService = {
         cuisine: string;
         difficulty: string;
         cookingTime: number;
+        ingredients?: string[];
+        instructions?: string[];
+        tips?: string[];
     }) => {
         try {
             // Create the video document
@@ -311,6 +314,24 @@ export const DatabaseService = {
             return video;
         } catch (error) {
             console.error('DatabaseService :: createVideo :: error', error);
+            throw error;
+        }
+    },
+
+    updateRecipeDetails: async (videoId: string, recipeData: {
+        ingredients?: string[];
+        instructions?: string[];
+        tips?: string[];
+    }) => {
+        try {
+            return await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                videoId,
+                recipeData
+            );
+        } catch (error) {
+            console.error('DatabaseService :: updateRecipeDetails :: error', error);
             throw error;
         }
     },

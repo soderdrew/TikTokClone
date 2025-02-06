@@ -1,7 +1,7 @@
 import React from 'react';
 import InteractionButton from '../common/InteractionButton';
 import CommentsModal from '../modals/CommentsModal';
-
+import { View } from 'react-native';
 interface CommentButtonProps {
   comments: number;
   onPress: () => void;
@@ -17,7 +17,7 @@ export default function CommentButton({ comments, onPress, videoId }: CommentBut
   };
 
   return (
-    <>
+    <View style={{ marginTop: 9 }}>
       <InteractionButton
         icon="chatbubble-outline"
         text={comments}
@@ -29,6 +29,6 @@ export default function CommentButton({ comments, onPress, videoId }: CommentBut
         onClose={() => setModalVisible(false)}
         videoId={videoId}
       />
-    </>
+    </View>
   );
 } 

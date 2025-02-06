@@ -12,6 +12,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import CommentButton from './interactions/CommentButton';
+import RecipeModal from './modals/RecipeModal';
 
 interface VideoCardProps {
     video: {
@@ -28,6 +29,9 @@ interface VideoCardProps {
         likesCount: number;
         commentsCount: number;
         bookmarksCount?: number;
+        ingredients?: string[];
+        instructions?: string[];
+        tips?: string[];
     };
     creator: {
         name: string;
@@ -55,6 +59,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
     onSave
 }) => {
     const [isPlaying, setIsPlaying] = useState(false);
+    const [showRecipe, setShowRecipe] = useState(false);
 
     const player = useVideoPlayer(video.videoUrl, player => {
         player.loop = true;
@@ -120,7 +125,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 variant === 'profile' && styles.actionsProfile
             ]}>
                 <TouchableOpacity
-                    style={styles.likeButton}
+                    style={styles.actionButton}
                     onPress={onLike}
                 >
                     <Ionicons
@@ -153,6 +158,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                     <Text style={styles.actionText}>
                         {video.bookmarksCount || 0}
                     </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => setShowRecipe(true)}
+                >
+                    <Ionicons
+                        name="restaurant-outline"
+                        size={26}
+                        color="white"
+                    />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -206,6 +222,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                     </View>
                 </View>
             </View>
+
+            <RecipeModal
+                visible={showRecipe}
+                onClose={() => setShowRecipe(false)}
+                recipe={video}
+            />
         </View>
     );
 };
@@ -256,17 +278,19 @@ const styles = StyleSheet.create({
     },
     actionButton: {
         alignItems: 'center',
-        marginBottom: 0,
-        height: 45,
+        marginBottom: 8,
+        height: 40,
         justifyContent: 'center',
     },
     actionText: {
         color: 'white',
         fontSize: 12,
-        marginTop: 2,
+        marginTop: 0,
         textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
         textShadowRadius: 1,
+        textAlign: 'center',
+        width: '100%'
     },
     likeButton: {
         alignItems: 'center',
@@ -282,6 +306,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 8,
+        maxWidth: '60%',
     },
     avatar: {
         width: 32,
@@ -316,7 +341,7 @@ const styles = StyleSheet.create({
         textShadowRadius: 1,
     },
     videoInfo: {
-        maxWidth: '75%',
+        maxWidth: '65%',
     },
     title: {
         color: 'white',
