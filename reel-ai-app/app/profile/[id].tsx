@@ -5,6 +5,7 @@ import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { VideoCard } from '../components/VideoCard';
 import { router } from 'expo-router';
+import FollowListModal from '../components/modals/FollowListModal';
 
 interface Profile extends Models.Document {
     userId: string;
@@ -40,6 +41,8 @@ export default function UserProfileScreen() {
     const [loading, setLoading] = useState(true);
     const [isFollowing, setIsFollowing] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+    const [followModalVisible, setFollowModalVisible] = useState(false);
+    const [followModalType, setFollowModalType] = useState<'followers' | 'following'>('followers');
 
     useEffect(() => {
         loadProfile();
@@ -59,15 +62,21 @@ export default function UserProfileScreen() {
 
             // Load profile
             const userProfileData = await DatabaseService.getProfile(id as string);
+            
+            // Sync recipes count with actual number of videos
+            await DatabaseService.syncRecipesCount(id as string);
+            
+            // Reload profile to get updated count
+            const updatedProfileData = await DatabaseService.getProfile(id as string);
             const userProfile: Profile = {
-                ...userProfileData,
-                userId: userProfileData.userId,
-                name: userProfileData.name,
-                bio: userProfileData.bio || '',
-                avatarUrl: userProfileData.avatarUrl || '',
-                recipesCount: userProfileData.recipesCount || 0,
-                followersCount: userProfileData.followersCount || 0,
-                followingCount: userProfileData.followingCount || 0,
+                ...updatedProfileData,
+                userId: updatedProfileData.userId,
+                name: updatedProfileData.name,
+                bio: updatedProfileData.bio || '',
+                avatarUrl: updatedProfileData.avatarUrl || '',
+                recipesCount: updatedProfileData.recipesCount || 0,
+                followersCount: updatedProfileData.followersCount || 0,
+                followingCount: updatedProfileData.followingCount || 0,
             };
             setProfile(userProfile);
 
@@ -172,15 +181,35 @@ export default function UserProfileScreen() {
                         <Text style={styles.statNumber}>{profile.recipesCount}</Text>
                         <Text style={styles.statLabel}>Recipes</Text>
                     </View>
-                    <View style={styles.statItem}>
+                    <TouchableOpacity 
+                        style={styles.statItem}
+                        onPress={() => {
+                            setFollowModalType('followers');
+                            setFollowModalVisible(true);
+                        }}
+                    >
                         <Text style={styles.statNumber}>{profile.followersCount}</Text>
                         <Text style={styles.statLabel}>Followers</Text>
-                    </View>
-                    <View style={styles.statItem}>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={styles.statItem}
+                        onPress={() => {
+                            setFollowModalType('following');
+                            setFollowModalVisible(true);
+                        }}
+                    >
                         <Text style={styles.statNumber}>{profile.followingCount}</Text>
                         <Text style={styles.statLabel}>Following</Text>
-                    </View>
+                    </TouchableOpacity>
                 </View>
+
+                {/* Add FollowListModal */}
+                <FollowListModal
+                    visible={followModalVisible}
+                    onClose={() => setFollowModalVisible(false)}
+                    userId={profile.userId}
+                    type={followModalType}
+                />
             </View>
 
             <View style={styles.content}>

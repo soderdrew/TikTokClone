@@ -17,6 +17,7 @@ import { AuthService, DatabaseService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { VideoCard } from '../components/VideoCard';
 import EditProfileModal from '../components/modals/EditProfileModal';
+import FollowListModal from '../components/modals/FollowListModal';
 
 interface UserProfile extends Models.Document {
   userId: string;
@@ -52,6 +53,8 @@ export default function ProfileScreen() {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = React.useState(false);
+  const [followModalVisible, setFollowModalVisible] = React.useState(false);
+  const [followModalType, setFollowModalType] = React.useState<'followers' | 'following'>('followers');
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -126,7 +129,13 @@ export default function ProfileScreen() {
 
       // Load profile data
       const userProfile = await DatabaseService.getProfile(currentUser.$id);
-      setProfile(userProfile as UserProfile);
+      
+      // Sync recipes count with actual number of videos
+      await DatabaseService.syncRecipesCount(currentUser.$id);
+      
+      // Reload profile to get updated count
+      const updatedProfile = await DatabaseService.getProfile(currentUser.$id);
+      setProfile(updatedProfile as UserProfile);
 
       // Load all video types
       await loadAllVideos(currentUser.$id);
@@ -282,14 +291,26 @@ export default function ProfileScreen() {
                   <Text style={styles.statNumber}>{profile.recipesCount}</Text>
                   <Text style={styles.statLabel}>Recipes</Text>
                 </View>
-                <View style={styles.statItem}>
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => {
+                    setFollowModalType('followers');
+                    setFollowModalVisible(true);
+                  }}
+                >
                   <Text style={styles.statNumber}>{profile.followersCount}</Text>
                   <Text style={styles.statLabel}>Followers</Text>
-                </View>
-                <View style={styles.statItem}>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.statItem}
+                  onPress={() => {
+                    setFollowModalType('following');
+                    setFollowModalVisible(true);
+                  }}
+                >
                   <Text style={styles.statNumber}>{profile.followingCount}</Text>
                   <Text style={styles.statLabel}>Following</Text>
-                </View>
+                </TouchableOpacity>
               </View>
 
               {/* Tabs */}
@@ -352,12 +373,20 @@ export default function ProfileScreen() {
 
       {/* Edit Profile Modal */}
       {profile && (
-        <EditProfileModal
-          visible={isEditModalVisible}
-          onClose={() => setIsEditModalVisible(false)}
-          currentProfile={profile}
-          onProfileUpdate={loadUserData}
-        />
+        <>
+          <EditProfileModal
+            visible={isEditModalVisible}
+            onClose={() => setIsEditModalVisible(false)}
+            currentProfile={profile}
+            onProfileUpdate={loadUserData}
+          />
+          <FollowListModal
+            visible={followModalVisible}
+            onClose={() => setFollowModalVisible(false)}
+            userId={profile.userId}
+            type={followModalType}
+          />
+        </>
       )}
     </View>
   );

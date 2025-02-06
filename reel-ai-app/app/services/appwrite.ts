@@ -271,6 +271,75 @@ export const DatabaseService = {
         }
     },
 
+    createVideo: async (userId: string, videoData: {
+        title: string;
+        description: string;
+        videoUrl: string;
+        thumbnailUrl: string;
+        duration: number;
+        cuisine: string;
+        difficulty: string;
+        cookingTime: number;
+    }) => {
+        try {
+            // Create the video document
+            const video = await databases.createDocument(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                ID.unique(),
+                {
+                    ...videoData,
+                    userId,
+                    likesCount: 0,
+                    commentsCount: 0,
+                    bookmarksCount: 0,
+                    createdAt: new Date().toISOString()
+                }
+            );
+
+            // Increment the user's recipesCount
+            const profile = await DatabaseService.getProfile(userId);
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.PROFILES,
+                userId,
+                {
+                    recipesCount: (profile.recipesCount || 0) + 1
+                }
+            );
+
+            return video;
+        } catch (error) {
+            console.error('DatabaseService :: createVideo :: error', error);
+            throw error;
+        }
+    },
+
+    deleteVideo: async (videoId: string, userId: string) => {
+        try {
+            // Delete the video document
+            await databases.deleteDocument(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                videoId
+            );
+
+            // Decrement the user's recipesCount
+            const profile = await DatabaseService.getProfile(userId);
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.PROFILES,
+                userId,
+                {
+                    recipesCount: Math.max(0, (profile.recipesCount || 0) - 1)
+                }
+            );
+        } catch (error) {
+            console.error('DatabaseService :: deleteVideo :: error', error);
+            throw error;
+        }
+    },
+
     // Like Methods
     likeVideo: async (userId: string, videoId: string) => {
         try {
@@ -1035,6 +1104,67 @@ export const DatabaseService = {
         } catch (error) {
             console.error('DatabaseService :: isFollowing :: error', error);
             return false;
+        }
+    },
+
+    getFollowers: async (userId: string) => {
+        try {
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.FOLLOWS,
+                [
+                    Query.equal('followedId', userId),
+                    Query.orderDesc('createdAt')
+                ]
+            );
+            return response.documents;
+        } catch (error) {
+            console.error('DatabaseService :: getFollowers :: error', error);
+            throw error;
+        }
+    },
+
+    getFollowing: async (userId: string) => {
+        try {
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.FOLLOWS,
+                [
+                    Query.equal('followerId', userId),
+                    Query.orderDesc('createdAt')
+                ]
+            );
+            return response.documents;
+        } catch (error) {
+            console.error('DatabaseService :: getFollowing :: error', error);
+            throw error;
+        }
+    },
+
+    // Add new method to sync recipes count
+    syncRecipesCount: async (userId: string) => {
+        try {
+            // Get all videos by user
+            const videos = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                [Query.equal('userId', userId)]
+            );
+
+            // Update profile with accurate count
+            await databases.updateDocument(
+                DATABASE_ID,
+                COLLECTIONS.PROFILES,
+                userId,
+                {
+                    recipesCount: videos.total
+                }
+            );
+
+            return videos.total;
+        } catch (error) {
+            console.error('DatabaseService :: syncRecipesCount :: error', error);
+            throw error;
         }
     }
 };
