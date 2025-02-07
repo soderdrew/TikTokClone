@@ -60,6 +60,7 @@ export default function ExploreScreen() {
   const lastRecipeId = React.useRef<string | null>(null);
 
   const searchOpacity = React.useRef(new Animated.Value(0)).current;
+  const searchHistoryListRef = React.useRef<FlatList>(null);
 
   const categories = [
     { id: '1', name: 'Quick & Easy', icon: 'timer-outline', cuisine: 'quick' },
@@ -202,6 +203,9 @@ export default function ExploreScreen() {
 
   const handleSearchFocus = () => {
     setShowSearchHistory(true);
+    if (searchHistoryListRef.current) {
+      searchHistoryListRef.current.scrollToOffset({ offset: 0, animated: false });
+    }
     Animated.timing(searchOpacity, {
       toValue: 1,
       duration: 200,
@@ -291,6 +295,19 @@ export default function ExploreScreen() {
     maxHeight: height - 150, // Account for search bar and status bar
   };
 
+  const handleBackPress = () => {
+    setShowSearchHistory(false);
+    setSearchQuery('');
+    setSelectedCategory('');
+    // Reset search history state
+    if (userId) {
+      loadSearchHistory(userId);
+      lastHistoryId.current = null;
+      setHasMoreMore(true);
+    }
+    Keyboard.dismiss();
+  };
+
   return (
     <View style={styles.container}>
       {/* Search Bar */}
@@ -298,12 +315,7 @@ export default function ExploreScreen() {
         <View style={styles.searchContainer}>
           {showSearchHistory || searchQuery || selectedCategory ? (
             <TouchableOpacity 
-              onPress={() => {
-                setShowSearchHistory(false);
-                setSearchQuery('');
-                setSelectedCategory('');
-                Keyboard.dismiss();
-              }}
+              onPress={handleBackPress}
               style={styles.searchIcon}
             >
               <Ionicons name="arrow-back" size={24} color="#666" />
@@ -329,11 +341,7 @@ export default function ExploreScreen() {
         {showSearchHistory && searchHistory.length > 0 ? (
           <>
             {/* Backdrop */}
-            <TouchableWithoutFeedback onPress={() => {
-              setShowSearchHistory(false);
-              setSearchQuery('');
-              Keyboard.dismiss();
-            }}>
+            <TouchableWithoutFeedback onPress={handleBackPress}>
               <View style={styles.backdrop} />
             </TouchableWithoutFeedback>
 
@@ -352,6 +360,7 @@ export default function ExploreScreen() {
                 </TouchableOpacity>
               </View>
               <FlatList
+                ref={searchHistoryListRef}
                 data={searchHistory}
                 keyExtractor={(item) => item.$id}
                 renderItem={({ item }) => (
