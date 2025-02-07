@@ -10,6 +10,7 @@ import {
     Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { scaleRecipe } from '../../utils/recipeUtils';
 
 interface RecipeModalProps {
     visible: boolean;
@@ -31,23 +32,27 @@ interface RecipeModalProps {
 
 const { width } = Dimensions.get('window');
 
-const formatIngredients = (ingredients?: string[]) => {
+const formatIngredients = (ingredients?: string[]): string[] => {
     if (!ingredients || ingredients.length === 0) return [];
-    
-    // If it's a single string (comma-separated), split it
+
+    // If ingredients contain a single string that resembles an array
     if (ingredients.length === 1) {
-        // Match items that are wrapped in quotes and separated by commas
-        const matches = ingredients[0].match(/"[^"]+"/g);
-        if (matches) {
-            return matches.map(item => 
-                // Remove the quotes and trim any whitespace
-                item.replace(/^"|"$/g, '').trim()
-            );
-        }
+        const rawString = ingredients[0];
+        
+        // Split by quotes first to handle the JSON-like format
+        const matches = rawString.match(/"([^"]*)"/g) || [];
+        
+        return matches
+            .map(item => item.replace(/^"|"$/g, '')) // Remove surrounding quotes
+            .map(item => item.trim()) // Trim whitespace
+            .map(item => `- ${item}`) // Add bullet points
+            .filter(item => item.length > 2); // Remove empty items
     }
-    
-    // If it's already an array, just strip quotes
-    return ingredients.map(item => item.trim().replace(/^["']|["']$/g, ''));
+
+    // If it's already an array, clean and format
+    return ingredients
+        .map(item => item.trim().replace(/^["']|["']$/g, ''))
+        .map(item => `- ${item}`);
 };
 
 const formatInstructions = (instructions?: string[]) => {
@@ -154,7 +159,93 @@ const CollapsibleSection = ({ title, children }: SectionProps) => {
     );
 };
 
+const scaleQuantity = (quantity: string, ratio: number): string => {
+    // Handle fractions like "1/2" or mixed numbers like "1 1/2"
+    const parts = quantity.trim().split(' ');
+    
+    if (parts.length === 2) {
+        // Handle mixed numbers like "1 1/2"
+        const whole = parseFloat(parts[0]);
+        const fraction = parts[1].split('/');
+        const fractional = parseFloat(fraction[0]) / parseFloat(fraction[1]);
+        const total = (whole + fractional) * ratio;
+        return total.toFixed(1);
+    } else if (quantity.includes('/')) {
+        // Handle simple fractions like "1/2"
+        const fraction = quantity.split('/');
+        const total = (parseFloat(fraction[0]) / parseFloat(fraction[1])) * ratio;
+        return total.toFixed(1);
+    }
+    
+    // Handle simple numbers
+    return (parseFloat(quantity) * ratio).toFixed(1);
+};
+
+const IngredientQuantity = ({ ingredient, isScaled, scalingRatio = 1 }: { 
+    ingredient: string; 
+    isScaled: boolean;
+    scalingRatio?: number;
+}) => {
+    // Match only the numeric part at the start
+    const match = ingredient.match(/^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*(.*)/);
+    
+    if (!match) {
+        return <Text style={styles.listText}>{ingredient}</Text>;
+    }
+
+    const [_, quantity, remainingText] = match;
+    const displayQuantity = isScaled ? scaleQuantity(quantity, scalingRatio) : quantity;
+
+    return (
+        <View style={styles.ingredientRow}>
+            <View style={[
+                styles.quantityBox,
+                isScaled && styles.quantityBoxScaled
+            ]}>
+                <Text style={[
+                    styles.quantityText,
+                    isScaled && styles.quantityTextScaled
+                ]}>
+                    {displayQuantity}
+                </Text>
+            </View>
+            {remainingText && <Text style={styles.listText}>{remainingText.trim()}</Text>}
+        </View>
+    );
+};
+
 export default function RecipeModal({ visible, onClose, recipe }: RecipeModalProps) {
+    const [servings, setServings] = useState(recipe.servingSize || 4);
+    const scalingRatio = recipe.servingSize ? servings / recipe.servingSize : 1;
+    
+    const updateServings = (newServings: number) => {
+        if (newServings < 1 || newServings > 100) return;
+        setServings(newServings);
+    };
+
+    const ServingAdjuster = () => (
+        <View style={styles.servingAdjuster}>
+            <TouchableOpacity 
+                onPress={() => updateServings(servings - 1)}
+                style={[styles.servingButton, servings <= 1 && styles.servingButtonDisabled]}
+                disabled={servings <= 1}
+            >
+                <Ionicons name="remove" size={20} color={servings <= 1 ? '#ccc' : '#666'} />
+            </TouchableOpacity>
+            <View style={styles.servingInfo}>
+                <Ionicons name="people-outline" size={20} color="#666" />
+                <Text style={styles.servingText}>Serves {servings}</Text>
+            </View>
+            <TouchableOpacity 
+                onPress={() => updateServings(servings + 1)}
+                style={[styles.servingButton, servings >= 100 && styles.servingButtonDisabled]}
+                disabled={servings >= 100}
+            >
+                <Ionicons name="add" size={20} color={servings >= 100 ? '#ccc' : '#666'} />
+            </TouchableOpacity>
+        </View>
+    );
+
     const formattedIngredients = formatIngredients(recipe.ingredients);
     const formattedInstructions = formatInstructions(recipe.instructions);
     const formattedTips = formatTips(recipe.tips);
@@ -191,13 +282,10 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
                                 <Ionicons name="speedometer-outline" size={20} color="#666" />
                                 <Text style={styles.infoText}>{recipe.difficulty}</Text>
                             </View>
-                            {recipe.servingSize && (
-                                <View style={styles.infoItem}>
-                                    <Ionicons name="people-outline" size={20} color="#666" />
-                                    <Text style={styles.infoText}>Serves {recipe.servingSize}</Text>
-                                </View>
-                            )}
                         </View>
+
+                        {/* Serving Size Adjuster */}
+                        {recipe.servingSize && <ServingAdjuster />}
 
                         {/* Dietary Information */}
                         {((recipe.dietaryFlags?.length ?? 0) > 0 || (recipe.allergens?.length ?? 0) > 0) && (
@@ -237,13 +325,19 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
                             <Text style={styles.description}>{recipe.description}</Text>
                         </CollapsibleSection>
 
-                        {/* Ingredients */}
+                        {/* Ingredients with scaled quantities */}
                         {formattedIngredients.length > 0 && (
                             <CollapsibleSection title="Ingredients">
                                 {formattedIngredients.map((ingredient, index) => (
                                     <View key={index} style={styles.listItem}>
                                         <Text style={styles.bullet}>•</Text>
-                                        <Text style={styles.listText}>{ingredient}</Text>
+                                        <View style={styles.ingredientContainer}>
+                                            <IngredientQuantity 
+                                                ingredient={ingredient.replace(/^-\s*/, '')} 
+                                                isScaled={servings !== recipe.servingSize}
+                                                scalingRatio={scalingRatio}
+                                            />
+                                        </View>
                                     </View>
                                 ))}
                             </CollapsibleSection>
@@ -355,15 +449,16 @@ const styles = StyleSheet.create({
     },
     listItem: {
         flexDirection: 'row',
-        marginBottom: 10,
+        marginBottom: 16,
         paddingRight: 10,
         alignItems: 'flex-start',
+        paddingLeft: 20,
     },
     bullet: {
         width: 20,
         fontSize: 16,
         color: '#666',
-        lineHeight: 24,
+        marginRight: 8,
     },
     stepNumber: {
         width: 25,
@@ -374,9 +469,10 @@ const styles = StyleSheet.create({
     },
     listText: {
         flex: 1,
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 15,
+        lineHeight: 22,
         color: '#444',
+        paddingVertical: 4,
     },
     dietarySection: {
         marginTop: 10,
@@ -442,5 +538,85 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#d32f2f',
         fontWeight: '500',
+    },
+    servingAdjuster: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 15,
+        marginHorizontal: 20,
+        marginTop: 10,
+        backgroundColor: '#f8f8f8',
+        borderRadius: 10,
+        gap: 15,
+    },
+    servingButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    servingButtonDisabled: {
+        backgroundColor: '#f5f5f5',
+        borderColor: '#eee',
+    },
+    servingInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        minWidth: 100,
+        justifyContent: 'center',
+    },
+    servingText: {
+        fontSize: 16,
+        color: '#666',
+        fontWeight: '500',
+    },
+    ingredientContainer: {
+        flex: 1,
+    },
+    ingredientRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    quantityBox: {
+        backgroundColor: '#f0f0f0',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 6,
+        minWidth: 70,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+    },
+    quantityBoxScaled: {
+        backgroundColor: '#e3f2fd',
+        borderColor: '#90caf9',
+    },
+    quantityText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#424242',
+    },
+    quantityTextScaled: {
+        color: '#1976d2',
+    },
+    originalContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+        marginLeft: 8,
+    },
+    originalLabel: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+        marginRight: 4,
     },
 }); 
