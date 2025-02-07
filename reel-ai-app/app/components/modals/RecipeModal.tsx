@@ -23,6 +23,9 @@ interface RecipeModalProps {
         ingredients?: string[];
         instructions?: string[];
         tips?: string[];
+        dietaryFlags?: string[];
+        allergens?: string[];
+        servingSize?: number;
     };
 }
 
@@ -83,6 +86,46 @@ const formatTips = (tips?: string[]) => {
     
     // If it's already an array, just strip quotes
     return tips.map(item => item.trim().replace(/^["']|["']$/g, ''));
+};
+
+const getDietaryIcon = (flag: string) => {
+    switch (flag.toLowerCase()) {
+        case 'vegetarian':
+            return '🥬';
+        case 'vegan':
+            return '🌱';
+        case 'gluten-free':
+            return '🌾';
+        case 'dairy-free':
+            return '🥛';
+        case 'keto':
+            return '🥑';
+        case 'paleo':
+            return '🍖';
+        default:
+            return '✓';
+    }
+};
+
+const getAllergenIcon = (allergen: string) => {
+    switch (allergen.toLowerCase()) {
+        case 'nuts':
+            return '🥜';
+        case 'dairy':
+            return '🧀';
+        case 'eggs':
+            return '🥚';
+        case 'soy':
+            return '🫘';
+        case 'wheat':
+            return '🌾';
+        case 'fish':
+            return '🐟';
+        case 'shellfish':
+            return '🦐';
+        default:
+            return '⚠️';
+    }
 };
 
 interface SectionProps {
@@ -148,7 +191,46 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
                                 <Ionicons name="speedometer-outline" size={20} color="#666" />
                                 <Text style={styles.infoText}>{recipe.difficulty}</Text>
                             </View>
+                            {recipe.servingSize && (
+                                <View style={styles.infoItem}>
+                                    <Ionicons name="people-outline" size={20} color="#666" />
+                                    <Text style={styles.infoText}>Serves {recipe.servingSize}</Text>
+                                </View>
+                            )}
                         </View>
+
+                        {/* Dietary Information */}
+                        {((recipe.dietaryFlags?.length ?? 0) > 0 || (recipe.allergens?.length ?? 0) > 0) && (
+                            <CollapsibleSection title="Dietary Information">
+                                {recipe.dietaryFlags && recipe.dietaryFlags.length > 0 && (
+                                    <View style={styles.dietarySection}>
+                                        <Text style={styles.dietaryTitle}>Dietary:</Text>
+                                        <View style={styles.dietaryFlags}>
+                                            {recipe.dietaryFlags.map((flag, index) => (
+                                                <View key={index} style={styles.dietaryFlag}>
+                                                    <Text style={styles.flagIcon}>{getDietaryIcon(flag.replace(/['"]+/g, ''))}</Text>
+                                                    <Text style={styles.flagText}>{flag.replace(/['"]+/g, '')}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
+                                
+                                {recipe.allergens && recipe.allergens.length > 0 && (
+                                    <View style={styles.allergenSection}>
+                                        <Text style={styles.allergenTitle}>Contains:</Text>
+                                        <View style={styles.allergenFlags}>
+                                            {recipe.allergens.map((allergen, index) => (
+                                                <View key={index} style={styles.allergenFlag}>
+                                                    <Text style={styles.allergenIcon}>{getAllergenIcon(allergen.replace(/['"]+/g, ''))}</Text>
+                                                    <Text style={styles.allergenText}>{allergen.replace(/['"]+/g, '')}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
+                                    </View>
+                                )}
+                            </CollapsibleSection>
+                        )}
 
                         {/* Description */}
                         <CollapsibleSection title="Description">
@@ -295,5 +377,70 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: '#444',
+    },
+    dietarySection: {
+        marginTop: 10,
+        paddingHorizontal: 20,
+    },
+    allergenSection: {
+        marginTop: 15,
+        paddingHorizontal: 20,
+        paddingBottom: 10,
+    },
+    dietaryTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 8,
+        color: '#444',
+    },
+    allergenTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        marginBottom: 8,
+        color: '#ff6b6b',
+    },
+    dietaryFlags: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    allergenFlags: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 10,
+    },
+    dietaryFlag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#e8f5e9',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    allergenFlag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#ffe5e5',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 6,
+    },
+    flagIcon: {
+        fontSize: 16,
+    },
+    allergenIcon: {
+        fontSize: 16,
+    },
+    flagText: {
+        fontSize: 14,
+        color: '#2e7d32',
+        fontWeight: '500',
+    },
+    allergenText: {
+        fontSize: 14,
+        color: '#d32f2f',
+        fontWeight: '500',
     },
 }); 
