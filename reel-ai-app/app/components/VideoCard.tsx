@@ -44,7 +44,7 @@ interface VideoCardProps {
     };
     isLiked?: boolean;
     isSaved?: boolean;
-    variant?: 'profile' | 'home';
+    variant?: 'profile' | 'home' | 'explore';
     onLike: () => void;
     onComment: () => void;
     onSave: () => void;
@@ -216,7 +216,10 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                     )}
                 </TouchableOpacity>
                 <View 
-                    style={styles.progressContainer}
+                    style={[
+                        styles.progressContainer,
+                        (variant === 'explore') && styles.progressContainerExplore
+                    ]}
                     {...panResponder.panHandlers}
                     onLayout={(event) => {
                         const { width, x } = event.nativeEvent.layout;
@@ -493,6 +496,9 @@ const styles = StyleSheet.create({
         right: 0,
         height: 2,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    progressContainerExplore: {
+        bottom: 120,
     },
     progressLine: {
         height: '100%',

@@ -3,7 +3,7 @@
     "name": "reel-ai-app",
     "slug": "reel-ai-app",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "portrait-up",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {

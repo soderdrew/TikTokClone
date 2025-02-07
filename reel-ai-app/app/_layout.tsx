@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 
@@ -22,6 +23,16 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
+
+  useEffect(() => {
+    // Lock to portrait orientation
+    async function lockOrientation() {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT_UP
+      );
+    }
+    lockOrientation();
+  }, []);
 
   if (!loaded) {
     return null;
