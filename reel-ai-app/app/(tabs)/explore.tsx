@@ -21,7 +21,7 @@ import { Models } from 'react-native-appwrite';
 import { router } from 'expo-router';
 import { debounce } from 'lodash';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const CATEGORY_WIDTH = width * 0.4;
 
 interface Recipe extends Models.Document {
@@ -280,6 +280,17 @@ export default function ExploreScreen() {
     setShowSearchHistory(false);
   };
 
+  const searchHistoryContainer = {
+    backgroundColor: '#1a1a1a',
+    marginHorizontal: 15,
+    marginTop: 8,
+    marginBottom: 15,
+    borderRadius: 10,
+    padding: 15,
+    flex: 1,
+    maxHeight: height - 150, // Account for search bar and status bar
+  };
+
   return (
     <View style={styles.container}>
       {/* Search Bar */}
@@ -340,46 +351,40 @@ export default function ExploreScreen() {
                   <Text style={styles.clearHistoryText}>Clear All</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView 
-                style={styles.searchHistoryScroll}
-                showsVerticalScrollIndicator={true}
-              >
-                {searchHistory.map((item) => {
-                  console.log('Rendering search history item:', item.query);
-                  return (
+              <FlatList
+                data={searchHistory}
+                keyExtractor={(item) => item.$id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.searchHistoryItem}
+                    activeOpacity={0.7}
+                    onPress={() => handleHistoryItemPress(item.query)}
+                  >
+                    <View style={styles.searchHistoryItemContent}>
+                      <Ionicons name="time-outline" size={20} color="#666" />
+                      <Text style={styles.searchHistoryItemText}>{item.query}</Text>
+                    </View>
                     <TouchableOpacity
-                      key={item.$id}
-                      style={styles.searchHistoryItem}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        console.log('Search history item pressed:', item.query);
-                        handleHistoryItemPress(item.query);
-                      }}
+                      onPress={() => handleDeleteHistoryItem(item.$id)}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <View style={styles.searchHistoryItemContent}>
-                        <Ionicons name="time-outline" size={20} color="#666" />
-                        <Text style={styles.searchHistoryItemText}>{item.query}</Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          console.log('Delete button pressed');
-                          handleDeleteHistoryItem(item.$id);
-                        }}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      >
-                        <Ionicons name="close" size={20} color="#666" />
-                      </TouchableOpacity>
+                      <Ionicons name="close" size={20} color="#666" />
                     </TouchableOpacity>
-                  );
-                })}
-                {isLoadingMore && (
-                  <ActivityIndicator 
-                    style={styles.loadingMore} 
-                    size="small" 
-                    color="#007AFF" 
-                  />
+                  </TouchableOpacity>
                 )}
-              </ScrollView>
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={() => (
+                  isLoadingMore ? (
+                    <ActivityIndicator 
+                      style={styles.loadingMore} 
+                      size="small" 
+                      color="#007AFF" 
+                    />
+                  ) : null
+                )}
+                showsVerticalScrollIndicator={true}
+              />
             </Animated.View>
           </>
         ) : (
@@ -520,6 +525,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 15,
     flex: 1,
+    maxHeight: height - 150, // Account for search bar and status bar
   },
   searchHistoryHeader: {
     flexDirection: 'row',
@@ -636,9 +642,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  searchHistoryScroll: {
-    flex: 1,
   },
   loadingMore: {
     paddingVertical: 20,
