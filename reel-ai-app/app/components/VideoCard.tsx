@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View,
     Text,
@@ -6,9 +6,13 @@ import {
     StyleSheet,
     TouchableOpacity,
     Dimensions,
-    Share
+    Share,
+    PanResponder,
+    GestureResponderEvent,
+    PanResponderGestureState
 } from 'react-native';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView, VideoPlayer } from 'expo-video';
+import { useEvent } from 'expo';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import CommentButton from './interactions/CommentButton';
@@ -46,6 +50,13 @@ interface VideoCardProps {
     onSave: () => void;
 }
 
+interface PlaybackStatus {
+    isLoaded: boolean;
+    didJustFinish?: boolean;
+    positionMillis?: number;
+    durationMillis?: number;
+}
+
 const { width, height } = Dimensions.get('window');
 
 export const VideoCard: React.FC<VideoCardProps> = ({
@@ -60,10 +71,84 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [showRecipe, setShowRecipe] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [isScrubbing, setIsScrubbing] = useState(false);
+    const wasPlayingRef = useRef(false);
+    const progressBarWidth = useRef(0);
+    const progressBarX = useRef(0);
 
-    const player = useVideoPlayer(video.videoUrl, player => {
+    const player = useVideoPlayer(video.videoUrl, (player: VideoPlayer) => {
         player.loop = true;
     });
+
+    const calculateProgress = (touchX: number) => {
+        const relativeX = touchX - progressBarX.current;
+        return Math.max(0, Math.min(1, relativeX / progressBarWidth.current));
+    };
+
+    // Update progress periodically
+    React.useEffect(() => {
+        let interval: NodeJS.Timeout;
+        
+        if (!isScrubbing && player) {
+            interval = setInterval(() => {
+                if (player.duration > 0) {
+                    const currentProgress = player.currentTime / player.duration;
+                    setProgress(Math.min(1, Math.max(0, currentProgress)));
+                }
+            }, 100);
+        }
+
+        return () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        };
+    }, [isScrubbing, player]);
+
+    const seekTo = async (newProgress: number) => {
+        if (player && player.duration > 0) {
+            const seekTime = newProgress * player.duration;
+            player.currentTime = seekTime;
+            setProgress(newProgress);
+        }
+    };
+
+    const panResponder = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: (event: GestureResponderEvent) => {
+                setIsScrubbing(true);
+                wasPlayingRef.current = player.playing;
+                if (player.playing) {
+                    player.pause();
+                }
+                const touchX = event.nativeEvent.pageX;
+                const newProgress = calculateProgress(touchX);
+                seekTo(newProgress);
+            },
+            onPanResponderMove: (event: GestureResponderEvent) => {
+                const touchX = event.nativeEvent.pageX;
+                const newProgress = calculateProgress(touchX);
+                seekTo(newProgress);
+            },
+            onPanResponderRelease: async (event: GestureResponderEvent) => {
+                const touchX = event.nativeEvent.pageX;
+                const newProgress = calculateProgress(touchX);
+                
+                // Ensure we seek the player correctly
+                await seekTo(newProgress);
+                setIsScrubbing(false);
+
+                if (wasPlayingRef.current) {
+                    setTimeout(() => {
+                        player.play();
+                    }, 50);
+                }
+            },
+        })
+    ).current;
 
     const handleShare = async () => {
         try {
@@ -94,6 +179,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         if (player.playing) {
             player.pause();
         } else {
+            const currentProgress = player.currentTime / player.duration;
+            setProgress(currentProgress);
             player.play();
         }
         setIsPlaying(!isPlaying);
@@ -105,19 +192,46 @@ export const VideoCard: React.FC<VideoCardProps> = ({
 
     return (
         <View style={styles.container}>
-            <TouchableOpacity onPress={togglePlay} style={styles.videoContainer}>
+            <View style={styles.videoContainer}>
                 <VideoView
                     player={player}
                     style={styles.video}
                     contentFit="cover"
                     nativeControls={false}
                 />
-                {!isPlaying && (
-                    <View style={styles.playButton}>
-                        <Ionicons name="play" size={50} color="white" />
-                    </View>
-                )}
-            </TouchableOpacity>
+                <TouchableOpacity 
+                    onPress={togglePlay} 
+                    style={styles.touchableOverlay}
+                    activeOpacity={1}
+                >
+                    {!isPlaying && (
+                        <View style={styles.playButton}>
+                            <Ionicons 
+                                name="play" 
+                                size={64} 
+                                color="white" 
+                                style={styles.playIcon}
+                            />
+                        </View>
+                    )}
+                </TouchableOpacity>
+                <View 
+                    style={styles.progressContainer}
+                    {...panResponder.panHandlers}
+                    onLayout={(event) => {
+                        const { width, x } = event.nativeEvent.layout;
+                        progressBarWidth.current = width;
+                        progressBarX.current = x;
+                    }}
+                >
+                    <View style={[styles.progressLine, { width: `${progress * 100}%` }]} />
+                    <View style={[
+                        styles.scrubberHandle, 
+                        { left: `${progress * 100}%` },
+                        isScrubbing && { transform: [{ scale: 1.2 }] }
+                    ]} />
+                </View>
+            </View>
 
             {/* Right side interaction buttons */}
             <View style={[
@@ -245,17 +359,18 @@ const styles = StyleSheet.create({
     video: {
         flex: 1,
     },
+    touchableOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
+    },
     playButton: {
         position: 'absolute',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        top: '50%',
-        left: '50%',
-        transform: [{ translateX: -40 }, { translateY: -40 }],
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
     },
     actions: {
         position: 'absolute',
@@ -369,6 +484,35 @@ const styles = StyleSheet.create({
         fontSize: 12,
         textShadowColor: 'black',
         textShadowOffset: { width: -1, height: 1 },
+        textShadowRadius: 1,
+    },
+    progressContainer: {
+        position: 'absolute',
+        bottom: 88,
+        left: 0,
+        right: 0,
+        height: 2,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    progressLine: {
+        height: '100%',
+        width: '100%',
+        backgroundColor: 'white',
+    },
+    scrubberHandle: {
+        position: 'absolute',
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: 'white',
+        top: -5,
+        marginLeft: -6,
+        borderWidth: 2,
+        borderColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    playIcon: {
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: 1, height: 1 },
         textShadowRadius: 1,
     },
 }); 
