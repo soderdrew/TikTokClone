@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity, FlatList } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
@@ -33,6 +33,9 @@ interface Video extends Models.Document {
 }
 
 const { width } = Dimensions.get('window');
+const HORIZONTAL_PADDING = 16;
+const CARD_GAP = 20;
+const CARD_WIDTH = (width - (HORIZONTAL_PADDING * 2) - CARD_GAP) / 2;
 
 export default function UserProfileScreen() {
     const { id } = useLocalSearchParams();
@@ -214,28 +217,33 @@ export default function UserProfileScreen() {
 
             <View style={styles.content}>
                 <Text style={styles.sectionTitle}>Recipes</Text>
-                <View style={styles.videosGrid}>
-                    {videos.map(video => (
+                <FlatList
+                    data={videos}
+                    renderItem={({ item }) => (
                         <TouchableOpacity 
-                            key={video.$id}
+                            key={item.$id}
                             style={styles.videoCard}
-                            onPress={() => router.push(`/(video)/${video.$id}`)}
+                            onPress={() => router.push(`/(video)/${item.$id}`)}
                         >
                             <Image
-                                source={{ uri: video.thumbnailUrl }}
+                                source={{ uri: item.thumbnailUrl }}
                                 style={styles.thumbnail}
                             />
                             <View style={styles.videoInfo}>
                                 <Text style={styles.videoTitle} numberOfLines={1}>
-                                    {video.title}
+                                    {item.title}
                                 </Text>
                                 <Text style={styles.videoStats}>
-                                    {video.likesCount || 0} likes • {video.commentsCount || 0} comments
+                                    {item.likesCount || 0} likes • {item.commentsCount || 0} comments
                                 </Text>
                             </View>
                         </TouchableOpacity>
-                    ))}
-                </View>
+                    )}
+                    keyExtractor={item => item.$id}
+                    numColumns={2}
+                    columnWrapperStyle={styles.row}
+                    scrollEnabled={false}
+                />
             </View>
         </ScrollView>
     );
@@ -319,30 +327,36 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     content: {
-        padding: 16,
+        padding: 8,
     },
     sectionTitle: {
         color: 'white',
         fontSize: 20,
         fontWeight: 'bold',
-        marginBottom: 16,
+        marginBottom: 8,
     },
     videosGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 10,
-        paddingHorizontal: 5,
+        justifyContent: 'space-between',
+        paddingTop: 8,
+    },
+    row: {
+        flex: 1,
+        justifyContent: 'space-between',
+        paddingHorizontal: HORIZONTAL_PADDING,
+        gap: CARD_GAP,
     },
     videoCard: {
-        width: (width - 40) / 2, // 2 columns with gap
+        width: CARD_WIDTH,
         backgroundColor: '#1a1a1a',
         borderRadius: 12,
         overflow: 'hidden',
-        marginBottom: 10,
+        marginBottom: CARD_GAP,
     },
     thumbnail: {
         width: '100%',
-        height: (width - 40) / 2, // Square aspect ratio
+        height: CARD_WIDTH,
         backgroundColor: '#333',
     },
     videoInfo: {

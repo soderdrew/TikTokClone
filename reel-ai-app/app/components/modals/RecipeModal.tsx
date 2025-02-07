@@ -215,33 +215,34 @@ const IngredientQuantity = ({ ingredient, isScaled, scalingRatio = 1 }: {
 };
 
 export default function RecipeModal({ visible, onClose, recipe }: RecipeModalProps) {
-    const [servings, setServings] = useState(recipe.servingSize || 4);
-    const scalingRatio = recipe.servingSize ? servings / recipe.servingSize : 1;
+    const [multiplier, setMultiplier] = useState(1);
+    const scalingRatio = multiplier;
     
-    const updateServings = (newServings: number) => {
-        if (newServings < 1 || newServings > 100) return;
-        setServings(newServings);
+    const updateMultiplier = (newMultiplier: number) => {
+        if (newMultiplier < 0.5 || newMultiplier > 10) return;
+        setMultiplier(newMultiplier);
     };
 
     const ServingAdjuster = () => (
         <View style={styles.servingAdjuster}>
             <TouchableOpacity 
-                onPress={() => updateServings(servings - 1)}
-                style={[styles.servingButton, servings <= 1 && styles.servingButtonDisabled]}
-                disabled={servings <= 1}
+                onPress={() => updateMultiplier(multiplier - 0.5)}
+                style={[styles.servingButton, multiplier <= 0.5 && styles.servingButtonDisabled]}
+                disabled={multiplier <= 0.5}
             >
-                <Ionicons name="remove" size={20} color={servings <= 1 ? '#ccc' : '#666'} />
+                <Ionicons name="remove" size={20} color={multiplier <= 0.5 ? '#ccc' : '#666'} />
             </TouchableOpacity>
             <View style={styles.servingInfo}>
-                <Ionicons name="people-outline" size={20} color="#666" />
-                <Text style={styles.servingText}>Serves {servings}</Text>
+                <Ionicons name="calculator-outline" size={20} color="#666" />
+                <Text style={styles.servingText}>{multiplier}x</Text>
+                <Text style={styles.servingSubtext}>({Math.round(recipe.servingSize! * multiplier)} servings)</Text>
             </View>
             <TouchableOpacity 
-                onPress={() => updateServings(servings + 1)}
-                style={[styles.servingButton, servings >= 100 && styles.servingButtonDisabled]}
-                disabled={servings >= 100}
+                onPress={() => updateMultiplier(multiplier + 0.5)}
+                style={[styles.servingButton, multiplier >= 10 && styles.servingButtonDisabled]}
+                disabled={multiplier >= 10}
             >
-                <Ionicons name="add" size={20} color={servings >= 100 ? '#ccc' : '#666'} />
+                <Ionicons name="add" size={20} color={multiplier >= 10 ? '#ccc' : '#666'} />
             </TouchableOpacity>
         </View>
     );
@@ -334,7 +335,7 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
                                         <View style={styles.ingredientContainer}>
                                             <IngredientQuantity 
                                                 ingredient={ingredient.replace(/^-\s*/, '')} 
-                                                isScaled={servings !== recipe.servingSize}
+                                                isScaled={scalingRatio !== 1}
                                                 scalingRatio={scalingRatio}
                                             />
                                         </View>
@@ -568,13 +569,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        minWidth: 100,
+        minWidth: 140,
         justifyContent: 'center',
     },
     servingText: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#666',
-        fontWeight: '500',
+        fontWeight: '600',
+    },
+    servingSubtext: {
+        fontSize: 14,
+        color: '#999',
+        marginLeft: 4,
     },
     ingredientContainer: {
         flex: 1,

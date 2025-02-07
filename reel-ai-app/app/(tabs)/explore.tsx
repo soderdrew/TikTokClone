@@ -55,14 +55,16 @@ export default function ExploreScreen() {
   const [userId, setUserId] = React.useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [hasMoreHistory, setHasMoreMore] = React.useState(true);
-  const lastId = React.useRef<string | null>(null);
+  const [hasMoreRecipes, setHasMoreRecipes] = React.useState(true);
+  const lastHistoryId = React.useRef<string | null>(null);
+  const lastRecipeId = React.useRef<string | null>(null);
 
   const searchOpacity = React.useRef(new Animated.Value(0)).current;
 
   const categories = [
     { id: '1', name: 'Quick & Easy', icon: 'timer-outline', cuisine: 'quick' },
     { id: '2', name: 'Italian', icon: 'pizza-outline', cuisine: 'italian' },
-    { id: '3', name: 'Asian', icon: 'restaurant-outline', cuisine: 'asian' },
+    { id: '3', name: 'Chinese', icon: 'restaurant-outline', cuisine: 'chinese' },
     { id: '4', name: 'Mexican', icon: 'flame-outline', cuisine: 'mexican' },
     { id: '5', name: 'Desserts', icon: 'ice-cream-outline', cuisine: 'dessert' },
     { id: '6', name: 'Healthy', icon: 'leaf-outline', cuisine: 'healthy' },
@@ -93,14 +95,14 @@ export default function ExploreScreen() {
       if (loadMore && !hasMoreHistory) return;
       
       setIsLoadingMore(loadMore);
-      const history = await DatabaseService.getSearchHistory(uid, 10, loadMore ? lastId.current : null);
+      const history = await DatabaseService.getSearchHistory(uid, 10, loadMore ? lastHistoryId.current : null);
       
       if (history.documents.length < 10) {
         setHasMoreMore(false);
       }
       
       if (history.documents.length > 0) {
-        lastId.current = history.documents[history.documents.length - 1].$id;
+        lastHistoryId.current = history.documents[history.documents.length - 1].$id;
       }
 
       const historyItems = history.documents as SearchHistoryItem[];
@@ -120,21 +122,55 @@ export default function ExploreScreen() {
     }
   };
 
-  const loadRecipes = async () => {
+  const loadRecipes = async (loadMore: boolean = false) => {
     try {
-      setIsLoading(true);
+      if (!loadMore) {
+        setIsLoading(true);
+        lastRecipeId.current = null;
+      } else {
+        if (!hasMoreRecipes || isLoadingMore) return;
+        setIsLoadingMore(true);
+      }
+
       let recipesData;
       if (selectedCategory) {
         const category = categories.find(c => c.name === selectedCategory);
-        recipesData = await DatabaseService.getRecipesByCuisine(category?.cuisine || '');
+        recipesData = await DatabaseService.getRecipesByCuisine(
+          category?.cuisine || '',
+          10,
+          loadMore ? lastRecipeId.current : null
+        );
       } else {
-        recipesData = await DatabaseService.getAllRecipes();
+        recipesData = await DatabaseService.getAllRecipes(
+          10,
+          loadMore ? lastRecipeId.current : null
+        );
       }
-      setRecipes(recipesData.documents as Recipe[]);
+
+      if (recipesData.documents.length < 10) {
+        setHasMoreRecipes(false);
+      } else {
+        setHasMoreRecipes(true);
+      }
+
+      if (recipesData.documents.length > 0) {
+        lastRecipeId.current = recipesData.documents[recipesData.documents.length - 1].$id;
+      }
+
+      setRecipes(prev => 
+        loadMore ? [...prev, ...recipesData.documents] : recipesData.documents
+      );
     } catch (error) {
       console.error('Error loading recipes:', error);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const handleLoadMoreRecipes = () => {
+    if (!isLoadingMore && hasMoreRecipes) {
+      loadRecipes(true);
     }
   };
 
@@ -352,27 +388,34 @@ export default function ExploreScreen() {
             {!searchQuery && (
               <>
                 <Text style={styles.sectionTitle}>Categories</Text>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.categoriesContainer}
-                >
-                  {categories.map((category) => (
-                    <TouchableOpacity
-                      key={category.id}
-                      style={[
-                        styles.categoryCard,
-                        selectedCategory === category.name && styles.selectedCategory
-                      ]}
-                      onPress={() => setSelectedCategory(
-                        selectedCategory === category.name ? '' : category.name
-                      )}
-                    >
-                      <Ionicons name={category.icon as any} size={24} color="white" />
-                      <Text style={styles.categoryText}>{category.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                <View style={styles.categoriesWrapper}>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.categoriesContainer}
+                    contentContainerStyle={styles.categoriesContent}
+                  >
+                    {categories.map((category) => (
+                      <TouchableOpacity
+                        key={category.id}
+                        style={[
+                          styles.categoryCard,
+                          selectedCategory === category.name && styles.selectedCategory
+                        ]}
+                        onPress={() => {
+                          setSelectedCategory(
+                            selectedCategory === category.name ? '' : category.name
+                          );
+                          setHasMoreRecipes(true);
+                          lastRecipeId.current = null;
+                        }}
+                      >
+                        <Ionicons name={category.icon as any} size={24} color="white" />
+                        <Text style={styles.categoryText}>{category.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
               </>
             )}
 
@@ -380,7 +423,7 @@ export default function ExploreScreen() {
             <Text style={styles.sectionTitle}>
               {searchQuery ? 'Search Results' : selectedCategory ? `${selectedCategory} Recipes` : 'Popular Recipes'}
             </Text>
-            {isLoading ? (
+            {isLoading && !recipes.length ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#007AFF" />
               </View>
@@ -420,6 +463,15 @@ export default function ExploreScreen() {
                 )}
                 keyExtractor={item => item.$id}
                 contentContainerStyle={styles.recipeGrid}
+                onEndReached={handleLoadMoreRecipes}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={() => (
+                  isLoadingMore ? (
+                    <View style={styles.loadingMore}>
+                      <ActivityIndicator size="small" color="#007AFF" />
+                    </View>
+                  ) : null
+                )}
               />
             )}
           </View>
@@ -510,9 +562,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 8,
   },
+  categoriesWrapper: {
+    height: 100,
+    marginBottom: 15,
+  },
   categoriesContainer: {
     paddingLeft: 15,
-    marginBottom: 15,
+  },
+  categoriesContent: {
+    paddingRight: 15,
   },
   categoryCard: {
     backgroundColor: '#1a1a1a',
@@ -534,6 +592,7 @@ const styles = StyleSheet.create({
   },
   recipeGrid: {
     padding: 8,
+    paddingBottom: 270,
   },
   recipeCard: {
     flex: 1,
@@ -582,7 +641,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   loadingMore: {
-    paddingVertical: 10,
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   backdrop: {
     position: 'absolute',
