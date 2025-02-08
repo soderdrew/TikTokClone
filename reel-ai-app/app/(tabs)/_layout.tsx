@@ -44,14 +44,6 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="(video)"
-        options={{
-          title: '',
-          tabBarIcon: () => null,
-          tabBarButton: () => null,
-        }}
-      />
     </Tabs>
   );
 }
