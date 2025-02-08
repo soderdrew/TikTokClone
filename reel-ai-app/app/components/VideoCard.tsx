@@ -58,6 +58,8 @@ interface PlaybackStatus {
 }
 
 const { width, height } = Dimensions.get('window');
+const BOTTOM_TAB_HEIGHT = 60; // Standard bottom tab height
+const TOP_SPACING = 0; // Remove top spacing
 
 export const VideoCard: React.FC<VideoCardProps> = ({
     video,
@@ -190,9 +192,29 @@ export const VideoCard: React.FC<VideoCardProps> = ({
         router.push(`/profile/${creator.userId}`);
     };
 
+    // Calculate the exact height needed for each video
+    const getVideoHeight = () => {
+        if (variant === 'home') {
+            // Return full screen height for perfect paging
+            return height;
+        }
+        return height;
+    };
+
     return (
-        <View style={styles.container}>
-            <View style={styles.videoContainer}>
+        <View style={[
+            styles.container,
+            {
+                height: height,
+                marginTop: 0,
+            }
+        ]}>
+            <View style={[
+                styles.videoContainer,
+                {
+                    height: height - BOTTOM_TAB_HEIGHT - 20,
+                }
+            ]}>
                 <VideoView
                     player={player}
                     style={styles.video}
@@ -218,7 +240,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
                 <View 
                     style={[
                         styles.progressContainer,
-                        (variant === 'explore') && styles.progressContainerExplore
+                        {
+                            bottom: BOTTOM_TAB_HEIGHT + 20, // Always position above nav bar
+                        }
                     ]}
                     {...panResponder.panHandlers}
                     onLayout={(event) => {
@@ -239,7 +263,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             {/* Right side interaction buttons */}
             <View style={[
                 styles.actions,
-                variant === 'profile' && styles.actionsProfile
+                variant === 'profile' && styles.actionsProfile,
+                variant === 'home' && styles.actionsHome
             ]}>
                 <TouchableOpacity
                     style={styles.actionButton}
@@ -303,7 +328,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({
             {/* Bottom info section */}
             <View style={[
                 styles.overlay,
-                variant === 'profile' && styles.overlayProfile
+                {
+                    paddingBottom: BOTTOM_TAB_HEIGHT + 20, // Always account for nav bar
+                }
             ]}>
                 <View style={styles.bottomSection}>
                     <TouchableOpacity 
@@ -355,6 +382,9 @@ const styles = StyleSheet.create({
         height: height,
         backgroundColor: 'transparent',
     },
+    containerHome: {
+        height: height - BOTTOM_TAB_HEIGHT,
+    },
     videoContainer: {
         flex: 1,
         backgroundColor: 'black',
@@ -385,6 +415,9 @@ const styles = StyleSheet.create({
     actionsProfile: {
         bottom: 100,
     },
+    actionsHome: {
+        bottom: 100,
+    },
     overlay: {
         ...StyleSheet.absoluteFillObject,
         justifyContent: 'flex-end',
@@ -393,6 +426,9 @@ const styles = StyleSheet.create({
     },
     overlayProfile: {
         paddingBottom: 20,
+    },
+    overlayHome: {
+        paddingBottom: BOTTOM_TAB_HEIGHT + 20,
     },
     actionButton: {
         alignItems: 'center',
@@ -491,14 +527,21 @@ const styles = StyleSheet.create({
     },
     progressContainer: {
         position: 'absolute',
-        bottom: 88,
+        bottom: BOTTOM_TAB_HEIGHT + 30,
         left: 0,
         right: 0,
         height: 2,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        zIndex: 10,
     },
     progressContainerExplore: {
         bottom: 120,
+    },
+    progressContainerProfile: {
+        bottom: 20,
+    },
+    progressContainerHome: {
+        bottom: BOTTOM_TAB_HEIGHT + 20,
     },
     progressLine: {
         height: '100%',

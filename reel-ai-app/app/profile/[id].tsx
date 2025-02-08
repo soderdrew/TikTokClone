@@ -6,6 +6,8 @@ import { Models } from 'react-native-appwrite';
 import { VideoCard } from '../components/VideoCard';
 import { router } from 'expo-router';
 import FollowListModal from '../components/modals/FollowListModal';
+import BackButton from '../components/BackButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Profile extends Models.Document {
     userId: string;
@@ -46,6 +48,7 @@ export default function UserProfileScreen() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [followModalVisible, setFollowModalVisible] = useState(false);
     const [followModalType, setFollowModalType] = useState<'followers' | 'following'>('followers');
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         loadProfile();
@@ -144,108 +147,111 @@ export default function UserProfileScreen() {
     }
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                {profile.avatarUrl ? (
-                    <Image
-                        source={{ uri: profile.avatarUrl }}
-                        style={styles.avatar}
-                    />
-                ) : (
-                    <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarText}>
-                            {profile.name[0]}
-                        </Text>
-                    </View>
-                )}
-                <Text style={styles.name}>{profile.name}</Text>
-                <Text style={styles.bio}>{profile.bio}</Text>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <BackButton />
+            <ScrollView style={styles.container}>
+                <View style={styles.header}>
+                    {profile.avatarUrl ? (
+                        <Image
+                            source={{ uri: profile.avatarUrl }}
+                            style={styles.avatar}
+                        />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>
+                                {profile.name[0]}
+                            </Text>
+                        </View>
+                    )}
+                    <Text style={styles.name}>{profile.name}</Text>
+                    <Text style={styles.bio}>{profile.bio}</Text>
 
-                {/* Only show follow button if viewing another user's profile */}
-                {currentUserId && currentUserId !== profile.userId && (
-                    <TouchableOpacity
-                        style={[
-                            styles.followButton,
-                            isFollowing && styles.followingButton
-                        ]}
-                        onPress={handleFollowToggle}
-                    >
-                        <Text style={[
-                            styles.followButtonText,
-                            isFollowing && styles.followingButtonText
-                        ]}>
-                            {isFollowing ? 'Following' : 'Follow'}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                <View style={styles.stats}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>{profile.recipesCount}</Text>
-                        <Text style={styles.statLabel}>Recipes</Text>
-                    </View>
-                    <TouchableOpacity 
-                        style={styles.statItem}
-                        onPress={() => {
-                            setFollowModalType('followers');
-                            setFollowModalVisible(true);
-                        }}
-                    >
-                        <Text style={styles.statNumber}>{profile.followersCount}</Text>
-                        <Text style={styles.statLabel}>Followers</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={styles.statItem}
-                        onPress={() => {
-                            setFollowModalType('following');
-                            setFollowModalVisible(true);
-                        }}
-                    >
-                        <Text style={styles.statNumber}>{profile.followingCount}</Text>
-                        <Text style={styles.statLabel}>Following</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Add FollowListModal */}
-                <FollowListModal
-                    visible={followModalVisible}
-                    onClose={() => setFollowModalVisible(false)}
-                    userId={profile.userId}
-                    type={followModalType}
-                />
-            </View>
-
-            <View style={styles.content}>
-                <Text style={styles.sectionTitle}>Recipes</Text>
-                <FlatList
-                    data={videos}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity 
-                            key={item.$id}
-                            style={styles.videoCard}
-                            onPress={() => router.push(`/(video)/${item.$id}`)}
+                    {/* Only show follow button if viewing another user's profile */}
+                    {currentUserId && currentUserId !== profile.userId && (
+                        <TouchableOpacity
+                            style={[
+                                styles.followButton,
+                                isFollowing && styles.followingButton
+                            ]}
+                            onPress={handleFollowToggle}
                         >
-                            <Image
-                                source={{ uri: item.thumbnailUrl }}
-                                style={styles.thumbnail}
-                            />
-                            <View style={styles.videoInfo}>
-                                <Text style={styles.videoTitle} numberOfLines={1}>
-                                    {item.title}
-                                </Text>
-                                <Text style={styles.videoStats}>
-                                    {item.likesCount || 0} likes • {item.commentsCount || 0} comments
-                                </Text>
-                            </View>
+                            <Text style={[
+                                styles.followButtonText,
+                                isFollowing && styles.followingButtonText
+                            ]}>
+                                {isFollowing ? 'Following' : 'Follow'}
+                            </Text>
                         </TouchableOpacity>
                     )}
-                    keyExtractor={item => item.$id}
-                    numColumns={2}
-                    columnWrapperStyle={styles.row}
-                    scrollEnabled={false}
-                />
-            </View>
-        </ScrollView>
+
+                    <View style={styles.stats}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNumber}>{profile.recipesCount}</Text>
+                            <Text style={styles.statLabel}>Recipes</Text>
+                        </View>
+                        <TouchableOpacity 
+                            style={styles.statItem}
+                            onPress={() => {
+                                setFollowModalType('followers');
+                                setFollowModalVisible(true);
+                            }}
+                        >
+                            <Text style={styles.statNumber}>{profile.followersCount}</Text>
+                            <Text style={styles.statLabel}>Followers</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.statItem}
+                            onPress={() => {
+                                setFollowModalType('following');
+                                setFollowModalVisible(true);
+                            }}
+                        >
+                            <Text style={styles.statNumber}>{profile.followingCount}</Text>
+                            <Text style={styles.statLabel}>Following</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Add FollowListModal */}
+                    <FollowListModal
+                        visible={followModalVisible}
+                        onClose={() => setFollowModalVisible(false)}
+                        userId={profile.userId}
+                        type={followModalType}
+                    />
+                </View>
+
+                <View style={styles.content}>
+                    <Text style={styles.sectionTitle}>Recipes</Text>
+                    <FlatList
+                        data={videos}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity 
+                                key={item.$id}
+                                style={styles.videoCard}
+                                onPress={() => router.push(`/(video)/${item.$id}`)}
+                            >
+                                <Image
+                                    source={{ uri: item.thumbnailUrl }}
+                                    style={styles.thumbnail}
+                                />
+                                <View style={styles.videoInfo}>
+                                    <Text style={styles.videoTitle} numberOfLines={1}>
+                                        {item.title}
+                                    </Text>
+                                    <Text style={styles.videoStats}>
+                                        {item.likesCount || 0} likes • {item.commentsCount || 0} comments
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                        keyExtractor={item => item.$id}
+                        numColumns={2}
+                        columnWrapperStyle={styles.row}
+                        scrollEnabled={false}
+                    />
+                </View>
+            </ScrollView>
+        </View>
     );
 }
 

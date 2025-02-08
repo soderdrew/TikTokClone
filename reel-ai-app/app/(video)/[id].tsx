@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   View, 
   StyleSheet, 
@@ -9,6 +9,7 @@ import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { VideoCard } from '../components/VideoCard';
+import BackButton from '../components/BackButton';
 
 interface Video extends Models.Document {
   title: string;
@@ -24,16 +25,19 @@ interface Video extends Models.Document {
   userId: string;
 }
 
+const { width, height } = Dimensions.get('window');
+const BOTTOM_TAB_HEIGHT = 60;
+
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams();
-  const [video, setVideo] = React.useState<Video | null>(null);
-  const [creator, setCreator] = React.useState<{ name: string; avatarUrl?: string; userId: string } | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [isLiked, setIsLiked] = React.useState(false);
-  const [isSaved, setIsSaved] = React.useState(false);
-  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null);
+  const [video, setVideo] = useState<Video | null>(null);
+  const [creator, setCreator] = useState<{ name: string; avatarUrl?: string; userId: string } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLiked, setIsLiked] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadVideo();
   }, [id]);
 
@@ -87,6 +91,40 @@ export default function VideoDetailScreen() {
     }
   }, [video]);
 
+  const handleLike = async () => {
+    try {
+      const user = await AuthService.getCurrentUser();
+      if (!user) return;
+
+      if (isLiked) {
+        await DatabaseService.unlikeVideo(user.$id, id as string);
+      } else {
+        await DatabaseService.likeVideo(user.$id, id as string);
+      }
+      setIsLiked(!isLiked);
+      loadVideo(); // Reload to get updated counts
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const user = await AuthService.getCurrentUser();
+      if (!user) return;
+
+      if (isSaved) {
+        await DatabaseService.unsaveRecipe(user.$id, id as string);
+      } else {
+        await DatabaseService.saveRecipe(user.$id, id as string);
+      }
+      setIsSaved(!isSaved);
+      loadVideo(); // Reload to get updated counts
+    } catch (error) {
+      console.error('Error toggling save:', error);
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -101,43 +139,18 @@ export default function VideoDetailScreen() {
 
   return (
     <View style={styles.container}>
+      <BackButton />
       <VideoCard
         video={video}
         creator={creator}
         isLiked={isLiked}
         isSaved={isSaved}
         variant="profile"
-        onLike={async () => {
-          if (!currentUserId) return;
-          try {
-            if (isLiked) {
-              await DatabaseService.unlikeVideo(currentUserId, video.$id);
-            } else {
-              await DatabaseService.likeVideo(currentUserId, video.$id);
-            }
-            setIsLiked(!isLiked);
-            loadVideo(); // Refresh video data to get updated counts
-          } catch (error) {
-            console.error('Error toggling like:', error);
-          }
-        }}
+        onLike={handleLike}
         onComment={() => {
           // Comment handling is built into VideoCard
         }}
-        onSave={async () => {
-          if (!currentUserId) return;
-          try {
-            if (isSaved) {
-              await DatabaseService.unsaveRecipe(currentUserId, video.$id);
-            } else {
-              await DatabaseService.saveRecipe(currentUserId, video.$id);
-            }
-            setIsSaved(!isSaved);
-            loadVideo(); // Refresh video data to get updated counts
-          } catch (error) {
-            console.error('Error toggling save:', error);
-          }
-        }}
+        onSave={handleSave}
       />
     </View>
   );
@@ -153,5 +166,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
-  },
+  }
 }); 

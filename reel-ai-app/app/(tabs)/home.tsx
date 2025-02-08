@@ -12,6 +12,7 @@ import { Models } from 'react-native-appwrite';
 import { useRouter } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
+const BOTTOM_TAB_HEIGHT = 60; // Standard bottom tab height
 
 interface Video extends Models.Document {
   title: string;
@@ -281,20 +282,33 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-                data={videos}
+        data={videos}
         snapToInterval={height}
         decelerationRate="fast"
         bounces={false}
         showsVerticalScrollIndicator={false}
         snapToAlignment="start"
+        pagingEnabled={true}
+        windowSize={3}
+        initialNumToRender={2}
+        maxToRenderPerBatch={3}
+        removeClippedSubviews={true}
+        getItemLayout={(data, index) => ({
+          length: height,
+          offset: height * index,
+          index,
+        })}
         viewabilityConfig={{
           itemVisiblePercentThreshold: 50
         }}
-                onRefresh={loadVideos}
-                refreshing={refreshing}
+        onRefresh={loadVideos}
+        refreshing={refreshing}
+        contentContainerStyle={{
+          paddingBottom: BOTTOM_TAB_HEIGHT
+        }}
         onMomentumScrollEnd={(event) => {
           const y = event.nativeEvent.contentOffset.y;
-                    const maxScroll = (videos.length - 1) * height;
+          const maxScroll = (videos.length - 1) * height;
           
           if (y > maxScroll) {
             flatListRef.current?.scrollToOffset({
@@ -304,37 +318,36 @@ export default function HomeScreen() {
           }
         }}
         ref={flatListRef}
-                renderItem={({ item }) => (
-                    <VideoCard
-                        key={item.$id}
-                        video={item}
-                        creator={creators[item.userId] || { name: 'Unknown Creator' }}
-                        isLiked={likedVideos.has(item.$id)}
-                        isSaved={savedRecipes.has(item.$id)}
-                        onLike={() => {
-                            if (!currentUserId) {
-                                router.push('/auth/login');
-                                return;
-                            }
-                            handleLike(item);
-                        }}
-                        onComment={() => {
-                            if (!currentUserId) {
-                                router.push('/auth/login');
-                                return;
-                            }
-                            handleComment(item);
-                        }}
-                        onSave={() => {
-                            if (!currentUserId) {
-                                router.push('/auth/login');
-                                return;
-                            }
-                            handleBookmark(item);
-                        }}
-                    />
-                )}
-                keyExtractor={item => item.$id}
+        renderItem={({ item }) => (
+          <VideoCard
+            key={item.$id}
+            video={item}
+            creator={creators[item.userId] || { name: 'Unknown Creator' }}
+            isLiked={likedVideos.has(item.$id)}
+            isSaved={savedRecipes.has(item.$id)}
+            onLike={() => {
+              if (!currentUserId) {
+                router.push('/auth/login');
+                return;
+              }
+              handleLike(item);
+            }}
+            onComment={() => {
+              if (!currentUserId) {
+                router.push('/auth/login');
+                return;
+              }
+              handleComment(item);
+            }}
+            onSave={() => {
+              if (!currentUserId) {
+                router.push('/auth/login');
+                return;
+              }
+              handleBookmark(item);
+            }}
+          />
+        )}
       />
     </View>
   );

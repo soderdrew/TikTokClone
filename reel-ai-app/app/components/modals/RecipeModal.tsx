@@ -233,9 +233,11 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
                 <Ionicons name="remove" size={20} color={multiplier <= 0.5 ? '#ccc' : '#666'} />
             </TouchableOpacity>
             <View style={styles.servingInfo}>
-                <Ionicons name="calculator-outline" size={20} color="#666" />
-                <Text style={styles.servingText}>{multiplier}x</Text>
-                <Text style={styles.servingSubtext}>({Math.round(recipe.servingSize! * multiplier)} servings)</Text>
+                <View style={styles.servingContent}>
+                    <Ionicons name="calculator-outline" size={20} color="#666" />
+                    <Text style={styles.servingText}>{multiplier}x</Text>
+                    <Text style={styles.servingSubtext}>({Math.round(recipe.servingSize! * multiplier)} servings)</Text>
+                </View>
             </View>
             <TouchableOpacity 
                 onPress={() => updateMultiplier(multiplier + 0.5)}
@@ -543,13 +545,13 @@ const styles = StyleSheet.create({
     servingAdjuster: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'space-between',
         paddingVertical: 15,
         marginHorizontal: 20,
         marginTop: 10,
         backgroundColor: '#f8f8f8',
         borderRadius: 10,
-        gap: 15,
+        paddingHorizontal: 15,
     },
     servingButton: {
         width: 36,
@@ -566,21 +568,28 @@ const styles = StyleSheet.create({
         borderColor: '#eee',
     },
     servingInfo: {
+        flex: 1,
+        alignItems: 'center',
+        minWidth: 140,
+    },
+    servingContent: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        minWidth: 140,
         justifyContent: 'center',
     },
     servingText: {
         fontSize: 18,
         color: '#666',
         fontWeight: '600',
+        minWidth: 45,
+        textAlign: 'center',
     },
     servingSubtext: {
         fontSize: 14,
         color: '#999',
         marginLeft: 4,
+        minWidth: 90,
     },
     ingredientContainer: {
         flex: 1,
