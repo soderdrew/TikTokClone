@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimension
 import { useLocalSearchParams } from 'expo-router';
 import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
-import { VideoCard } from '../components/VideoCard';
+import { MemoizedVideoCard as VideoCard } from '../components/VideoCard';
 import { router } from 'expo-router';
 import FollowListModal from '../components/modals/FollowListModal';
 import BackButton from '../components/BackButton';
@@ -133,7 +133,7 @@ export default function UserProfileScreen() {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
+                <ActivityIndicator size="large" color="#ff4444" />
             </View>
         );
     }
