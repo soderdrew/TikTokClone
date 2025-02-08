@@ -439,7 +439,7 @@ export default function ExploreScreen() {
             </Text>
             {isLoading && !recipes.length ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
+                <ActivityIndicator size="large" color="#ff4444" />
               </View>
             ) : filteredRecipes.length === 0 ? (
               <View style={styles.noResultsContainer}>
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectedCategory: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#ff4444',
   },
   categoryText: {
     color: 'white',

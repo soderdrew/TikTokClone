@@ -9,8 +9,10 @@ export default function TabLayout() {
         tabBarStyle: { 
           backgroundColor: '#000',
           borderTopColor: '#333',
+          borderTopWidth: 1,
+          height: 60,
         },
-        tabBarActiveTintColor: '#007AFF',
+        tabBarActiveTintColor: '#ff4444',
         tabBarInactiveTintColor: '#666',
         headerShown: false,
       }}
@@ -40,6 +42,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="(video)"
+        options={{
+          title: '',
+          tabBarIcon: () => null,
+          tabBarButton: () => null,
         }}
       />
     </Tabs>
