@@ -838,16 +838,22 @@ export const DatabaseService = {
     },
 
     // Recipe Methods
-    getAllRecipes: async () => {
+    getAllRecipes: async (limit: number = 10, lastId: string | null = null) => {
         return retryOperation(async () => {
             try {
+                const queries = [
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(limit)
+                ];
+
+                if (lastId) {
+                    queries.push(Query.cursorAfter(lastId));
+                }
+
                 return await databases.listDocuments(
                     DATABASE_ID,
                     COLLECTIONS.VIDEOS,
-                    [
-                        Query.orderDesc('$createdAt'),
-                        Query.limit(50)
-                    ]
+                    queries
                 );
             } catch (error) {
                 console.error('Error getting all recipes:', error);
@@ -856,17 +862,23 @@ export const DatabaseService = {
         });
     },
 
-    getRecipesByCuisine: async (cuisine: string) => {
+    getRecipesByCuisine: async (cuisine: string, limit: number = 10, lastId: string | null = null) => {
         return retryOperation(async () => {
             try {
+                const queries = [
+                    Query.equal('cuisine', cuisine),
+                    Query.orderDesc('$createdAt'),
+                    Query.limit(limit)
+                ];
+
+                if (lastId) {
+                    queries.push(Query.cursorAfter(lastId));
+                }
+
                 return await databases.listDocuments(
                     DATABASE_ID,
                     COLLECTIONS.VIDEOS,
-                    [
-                        Query.equal('cuisine', cuisine),
-                        Query.orderDesc('$createdAt'),
-                        Query.limit(50)
-                    ]
+                    queries
                 );
             } catch (error) {
                 console.error('Error getting recipes by cuisine:', error);

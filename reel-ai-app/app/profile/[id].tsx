@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, ActivityIndicator, Dimensions, TouchableOpacity, FlatList } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { VideoCard } from '../components/VideoCard';
 import { router } from 'expo-router';
 import FollowListModal from '../components/modals/FollowListModal';
+import BackButton from '../components/BackButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Profile extends Models.Document {
     userId: string;
@@ -33,6 +35,9 @@ interface Video extends Models.Document {
 }
 
 const { width } = Dimensions.get('window');
+const HORIZONTAL_PADDING = 16;
+const CARD_GAP = 20;
+const CARD_WIDTH = (width - (HORIZONTAL_PADDING * 2) - CARD_GAP) / 2;
 
 export default function UserProfileScreen() {
     const { id } = useLocalSearchParams();
@@ -43,6 +48,7 @@ export default function UserProfileScreen() {
     const [currentUserId, setCurrentUserId] = useState<string | null>(null);
     const [followModalVisible, setFollowModalVisible] = useState(false);
     const [followModalType, setFollowModalType] = useState<'followers' | 'following'>('followers');
+    const insets = useSafeAreaInsets();
 
     useEffect(() => {
         loadProfile();
@@ -141,103 +147,111 @@ export default function UserProfileScreen() {
     }
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                {profile.avatarUrl ? (
-                    <Image
-                        source={{ uri: profile.avatarUrl }}
-                        style={styles.avatar}
-                    />
-                ) : (
-                    <View style={styles.avatarPlaceholder}>
-                        <Text style={styles.avatarText}>
-                            {profile.name[0]}
-                        </Text>
-                    </View>
-                )}
-                <Text style={styles.name}>{profile.name}</Text>
-                <Text style={styles.bio}>{profile.bio}</Text>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <BackButton />
+            <ScrollView style={styles.container}>
+                <View style={styles.header}>
+                    {profile.avatarUrl ? (
+                        <Image
+                            source={{ uri: profile.avatarUrl }}
+                            style={styles.avatar}
+                        />
+                    ) : (
+                        <View style={styles.avatarPlaceholder}>
+                            <Text style={styles.avatarText}>
+                                {profile.name[0]}
+                            </Text>
+                        </View>
+                    )}
+                    <Text style={styles.name}>{profile.name}</Text>
+                    <Text style={styles.bio}>{profile.bio}</Text>
 
-                {/* Only show follow button if viewing another user's profile */}
-                {currentUserId && currentUserId !== profile.userId && (
-                    <TouchableOpacity
-                        style={[
-                            styles.followButton,
-                            isFollowing && styles.followingButton
-                        ]}
-                        onPress={handleFollowToggle}
-                    >
-                        <Text style={[
-                            styles.followButtonText,
-                            isFollowing && styles.followingButtonText
-                        ]}>
-                            {isFollowing ? 'Following' : 'Follow'}
-                        </Text>
-                    </TouchableOpacity>
-                )}
-
-                <View style={styles.stats}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statNumber}>{profile.recipesCount}</Text>
-                        <Text style={styles.statLabel}>Recipes</Text>
-                    </View>
-                    <TouchableOpacity 
-                        style={styles.statItem}
-                        onPress={() => {
-                            setFollowModalType('followers');
-                            setFollowModalVisible(true);
-                        }}
-                    >
-                        <Text style={styles.statNumber}>{profile.followersCount}</Text>
-                        <Text style={styles.statLabel}>Followers</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={styles.statItem}
-                        onPress={() => {
-                            setFollowModalType('following');
-                            setFollowModalVisible(true);
-                        }}
-                    >
-                        <Text style={styles.statNumber}>{profile.followingCount}</Text>
-                        <Text style={styles.statLabel}>Following</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Add FollowListModal */}
-                <FollowListModal
-                    visible={followModalVisible}
-                    onClose={() => setFollowModalVisible(false)}
-                    userId={profile.userId}
-                    type={followModalType}
-                />
-            </View>
-
-            <View style={styles.content}>
-                <Text style={styles.sectionTitle}>Recipes</Text>
-                <View style={styles.videosGrid}>
-                    {videos.map(video => (
-                        <TouchableOpacity 
-                            key={video.$id}
-                            style={styles.videoCard}
-                            onPress={() => router.push(`/(video)/${video.$id}`)}
+                    {/* Only show follow button if viewing another user's profile */}
+                    {currentUserId && currentUserId !== profile.userId && (
+                        <TouchableOpacity
+                            style={[
+                                styles.followButton,
+                                isFollowing && styles.followingButton
+                            ]}
+                            onPress={handleFollowToggle}
                         >
-                            <Image
-                                source={{ uri: video.thumbnailUrl }}
-                                style={styles.thumbnail}
-                            />
-                            <View style={styles.videoInfo}>
-                                <Text style={styles.videoTitle} numberOfLines={1}>
-                                    {video.title}
-                                </Text>
-                                <Text style={styles.videoStats}>
-                                    {video.likesCount || 0} likes • {video.commentsCount || 0} comments
-                                </Text>
-                            </View>
+                            <Text style={[
+                                styles.followButtonText,
+                                isFollowing && styles.followingButtonText
+                            ]}>
+                                {isFollowing ? 'Following' : 'Follow'}
+                            </Text>
                         </TouchableOpacity>
-                    ))}
+                    )}
+
+                    <View style={styles.stats}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statNumber}>{profile.recipesCount}</Text>
+                            <Text style={styles.statLabel}>Recipes</Text>
+                        </View>
+                        <TouchableOpacity 
+                            style={styles.statItem}
+                            onPress={() => {
+                                setFollowModalType('followers');
+                                setFollowModalVisible(true);
+                            }}
+                        >
+                            <Text style={styles.statNumber}>{profile.followersCount}</Text>
+                            <Text style={styles.statLabel}>Followers</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.statItem}
+                            onPress={() => {
+                                setFollowModalType('following');
+                                setFollowModalVisible(true);
+                            }}
+                        >
+                            <Text style={styles.statNumber}>{profile.followingCount}</Text>
+                            <Text style={styles.statLabel}>Following</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Add FollowListModal */}
+                    <FollowListModal
+                        visible={followModalVisible}
+                        onClose={() => setFollowModalVisible(false)}
+                        userId={profile.userId}
+                        type={followModalType}
+                    />
                 </View>
-            </View>
-        </ScrollView>
+
+                <View style={styles.content}>
+                    <Text style={styles.sectionTitle}>Recipes</Text>
+                    <FlatList
+                        data={videos}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity 
+                                key={item.$id}
+                                style={styles.videoCard}
+                                onPress={() => router.push(`/(video)/${item.$id}`)}
+                            >
+                                <Image
+                                    source={{ uri: item.thumbnailUrl }}
+                                    style={styles.thumbnail}
+                                />
+                                <View style={styles.videoInfo}>
+                                    <Text style={styles.videoTitle} numberOfLines={1}>
+                                        {item.title}
+                                    </Text>
+                                    <Text style={styles.videoStats}>
+                                        {item.likesCount || 0} likes • {item.commentsCount || 0} comments
+                                    </Text>
+                                </View>
+                            </TouchableOpacity>
+                        )}
+                        keyExtractor={item => item.$id}
+                        numColumns={2}
+                        columnWrapperStyle={styles.row}
+                        scrollEnabled={false}
+                    />
+                </View>
+            </ScrollView>
+        </View>
     );
 }
 
@@ -319,30 +333,36 @@ const styles = StyleSheet.create({
         fontSize: 14,
     },
     content: {
-        padding: 16,
+        padding: 8,
     },
     sectionTitle: {
         color: 'white',
         fontSize: 20,
         fontWeight: 'bold',
-        marginBottom: 16,
+        marginBottom: 8,
     },
     videosGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 10,
-        paddingHorizontal: 5,
+        justifyContent: 'space-between',
+        paddingTop: 8,
+    },
+    row: {
+        flex: 1,
+        justifyContent: 'space-between',
+        paddingHorizontal: HORIZONTAL_PADDING,
+        gap: CARD_GAP,
     },
     videoCard: {
-        width: (width - 40) / 2, // 2 columns with gap
+        width: CARD_WIDTH,
         backgroundColor: '#1a1a1a',
         borderRadius: 12,
         overflow: 'hidden',
-        marginBottom: 10,
+        marginBottom: CARD_GAP,
     },
     thumbnail: {
         width: '100%',
-        height: (width - 40) / 2, // Square aspect ratio
+        height: CARD_WIDTH,
         backgroundColor: '#333',
     },
     videoInfo: {

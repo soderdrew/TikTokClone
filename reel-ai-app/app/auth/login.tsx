@@ -119,9 +119,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
     padding: 20,
+    justifyContent: 'center',
   },
   headerContainer: {
-    marginTop: 60,
     marginBottom: 40,
   },
   title: {
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     color: '#888',
   },
   formContainer: {
-    flex: 1,
+    width: '100%',
   },
   input: {
     backgroundColor: '#1a1a1a',

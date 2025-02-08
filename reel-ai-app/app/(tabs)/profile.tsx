@@ -356,7 +356,7 @@ export default function ProfileScreen() {
                activeTab === 'liked' ? 'No liked videos yet' :
                'No saved recipes yet'}
             </Text>
-            {activeTab === 'recipes' && (
+            {/* {activeTab === 'recipes' && (
               <TouchableOpacity 
                 style={styles.createButton}
                 onPress={() => {
@@ -365,7 +365,7 @@ export default function ProfileScreen() {
               >
                 <Text style={styles.createButtonText}>Create Your First Recipe</Text>
               </TouchableOpacity>
-            )}
+            )} */}
           </View>
         }
         contentContainerStyle={styles.flatListContent}
