@@ -1,130 +1,122 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import InventoryGrid from '../components/inventory/InventoryGrid';
 import AddItemModal from '../components/modals/AddItemModal';
+import EditItemModal from '../components/modals/EditItemModal';
+import { getInventoryItems, deleteInventoryItem } from '../services/inventoryService';
 
 const { width } = Dimensions.get('window');
 
 // Temporary mock data
-const mockFridgeItems = [
-  { id: '1', name: 'Milk', quantity: 2, unit: 'L', icon: 'water' },
-  { id: '2', name: 'Eggs', quantity: 12, unit: 'pcs', icon: 'egg' },
-  { id: '3', name: 'Cheese', quantity: 500, unit: 'g', icon: 'square' },
-];
-
-const mockPantryItems = [
-  { id: '1', name: 'Rice', quantity: 2, unit: 'kg', icon: 'cube' },
-  { id: '2', name: 'Pasta', quantity: 3, unit: 'packs', icon: 'square' },
-  { id: '3', name: 'Flour', quantity: 1, unit: 'kg', icon: 'cube' },
+const mockKitchenItems = [
+  { id: '1', name: 'Milk', quantity: 2, unit: 'L' },
+  { id: '2', name: 'Eggs', quantity: 12, unit: 'pcs' },
+  { id: '3', name: 'Cheese', quantity: 500, unit: 'g' },
+  { id: '4', name: 'Rice', quantity: 2, unit: 'kg' },
+  { id: '5', name: 'Pasta', quantity: 3, unit: 'packs' },
+  { id: '6', name: 'Flour', quantity: 1, unit: 'kg' },
+  { id: '7', name: 'Sugar', quantity: 500, unit: 'g' },
+  { id: '8', name: 'Bread', quantity: 2, unit: 'loaves' },
+  { id: '9', name: 'Tomato Sauce Chef Boyardeez Nuts', quantity: 3, unit: 'cans' },
 ];
 
 export default function PantryScreen() {
   const router = useRouter();
-  const [selectedStorage, setSelectedStorage] = useState<'fridge' | 'pantry' | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [kitchenItems, setKitchenItems] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        const items = await getInventoryItems();
+        console.log('Fetched items:', items);
+        setKitchenItems(items);
+      } catch (error) {
+        console.error('Error fetching items:', error);
+      }
+    };
+    fetchItems();
+  }, []);
 
   const handleItemPress = (item: any) => {
-    // TODO: Show item details/edit modal
-    console.log('Item pressed:', item);
+    console.log('Selected item:', item);
+    setSelectedItem(item);
+    setShowEditModal(true);
   };
 
   const handleAddItem = (item: any) => {
-    // TODO: Add item to database
-    console.log('Adding item:', item);
+    setKitchenItems((prevItems) => [...prevItems, item]);
+  };
+
+  const handleEditItem = (editedItem: any) => {
+    setKitchenItems((prevItems) =>
+      prevItems.map((item) =>
+        item.$id === editedItem.$id ? { ...item, ...editedItem } : item
+      )
+    );
+    console.log('Editing item:', editedItem);
+  };
+
+  const handleDeleteItem = async (itemId: string) => {
+    try {
+      console.log('Attempting to delete item with ID:', itemId);
+      await deleteInventoryItem(itemId);
+      setKitchenItems((prevItems) => prevItems.filter(item => item.$id !== itemId));
+      console.log('Deleted item:', itemId);
+    } catch (error) {
+      console.error('Error deleting item:', error);
+    }
   };
 
   return (
     <View style={styles.container}>
-      {selectedStorage ? (
-        <>
-          {/* Inventory View */}
-          <View style={styles.header}>
-            <TouchableOpacity 
-              onPress={() => setSelectedStorage(null)}
-              style={styles.backButton}
-            >
-              <Ionicons name="arrow-back" size={24} color="white" />
-            </TouchableOpacity>
-            <Text style={styles.title}>
-              {selectedStorage === 'fridge' ? 'Fridge' : 'Pantry'}
-            </Text>
-            <TouchableOpacity 
-              onPress={() => setShowAddModal(true)}
-              style={styles.addButton}
-            >
-              <Ionicons name="add" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
+      <View style={styles.header}>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.title}>Kitchen Ingredients</Text>
+          <Text style={styles.pixelSubtitle}>Your Available Items</Text>
+        </View>
+      </View>
 
+      <View style={styles.contentContainer}>
+        {kitchenItems.length === 0 ? (
+          <Text style={styles.emptyMessage}>No ingredients available. Add some items!</Text>
+        ) : (
           <InventoryGrid 
-            items={selectedStorage === 'fridge' ? mockFridgeItems : mockPantryItems}
+            items={kitchenItems}
             onItemPress={handleItemPress}
           />
+        )}
 
-          <AddItemModal
-            visible={showAddModal}
-            onClose={() => setShowAddModal(false)}
-            onAdd={handleAddItem}
-            location={selectedStorage}
+        <TouchableOpacity 
+          style={styles.floatingAddButton}
+          onPress={() => setShowAddModal(true)}
+        >
+          <Ionicons name="add" size={32} color="white" />
+        </TouchableOpacity>
+
+        <AddItemModal
+          visible={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddItem}
+        />
+
+        {selectedItem && (
+          <EditItemModal
+            visible={showEditModal}
+            onClose={() => {
+              setShowEditModal(false);
+              setSelectedItem(null);
+            }}
+            onSave={handleEditItem}
+            onDelete={handleDeleteItem}
+            item={selectedItem}
           />
-        </>
-      ) : (
-        <>
-          {/* Storage Selection View */}
-          <View style={styles.header}>
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.title}>Storage Inventory</Text>
-              <Text style={styles.pixelSubtitle}>Choose Your Storage</Text>
-            </View>
-          </View>
-
-          <View style={styles.storageContainer}>
-            <TouchableOpacity 
-              style={styles.storageOption}
-              onPress={() => setSelectedStorage('fridge')}
-            >
-              <LinearGradient
-                colors={['#4a9eff', '#2d7cd1']}
-                style={styles.gradientBox}
-              >
-                <Ionicons name="snow-outline" size={48} color="white" />
-                <Text style={styles.storageText}>Fridge</Text>
-                <View style={styles.pixelStars}>
-                  <Text style={styles.starText}>★ ★ ★</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.storageOption}
-              onPress={() => setSelectedStorage('pantry')}
-            >
-              <LinearGradient
-                colors={['#ff4444', '#d12d2d']}
-                style={styles.gradientBox}
-              >
-                <Ionicons name="file-tray" size={48} color="white" />
-                <Text style={styles.storageText}>Pantry</Text>
-                <View style={styles.pixelStars}>
-                  <Text style={styles.starText}>★ ★ ★</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.actionButtons}>
-            <TouchableOpacity style={styles.pixelButton}>
-              <Text style={styles.buttonText}>Add Items</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.pixelButton, styles.recipeButton]}>
-              <Text style={styles.buttonText}>Find Recipes</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+        )}
+      </View>
     </View>
   );
 }
@@ -137,19 +129,13 @@ const styles = StyleSheet.create({
   },
   header: {
     marginTop: 60,
-    marginBottom: 40,
+    marginBottom: 20,
     flexDirection: 'row',
     justifyContent: 'center',
     width: '100%',
   },
   headerTextContainer: {
     alignItems: 'center',
-  },
-  backButton: {
-    padding: 8,
-  },
-  addButton: {
-    padding: 8,
   },
   title: {
     fontSize: 28,
@@ -164,56 +150,33 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     textAlign: 'center',
   },
-  storageContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 40,
-  },
-  storageOption: {
-    width: (width - 60) / 2,
-    aspectRatio: 0.8,
-  },
-  gradientBox: {
+  contentContainer: {
     flex: 1,
-    borderRadius: 12,
-    padding: 20,
+    position: 'relative',
+  },
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#4a9eff',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#333',
-  },
-  storageText: {
-    color: 'white',
-    fontSize: 20,
-    fontFamily: 'SpaceMono',
-    marginTop: 16,
-  },
-  pixelStars: {
-    marginTop: 8,
-  },
-  starText: {
-    color: '#FFD700',
-    fontSize: 24,
-    fontFamily: 'SpaceMono',
-  },
-  actionButtons: {
-    gap: 16,
-  },
-  pixelButton: {
-    backgroundColor: '#4a9eff',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 3,
     borderColor: '#2d7cd1',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  recipeButton: {
-    backgroundColor: '#ff4444',
-    borderColor: '#d12d2d',
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 18,
+  emptyMessage: {
+    color: '#999',
+    fontSize: 16,
     fontFamily: 'SpaceMono',
+    textAlign: 'center',
+    marginTop: 20,
   },
 }); 

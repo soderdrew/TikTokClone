@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
-import { createInventoryItem } from '../../services/inventoryService';
+import { updateInventoryItem } from '../../services/inventoryService';
 
 // Common units for food items
 const UNITS = {
@@ -26,59 +26,68 @@ const UNITS = {
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onAdd: (item: {
+  onSave: (item: {
+    name: string;
+    quantity: number;
+    unit: string;
+    customIcon?: string;
+    icon?: string;
+  }) => void;
+  onDelete: (id: string) => void;
+  item: {
+    $id: string;
     name: string;
     quantity: number;
     unit: string;
     icon?: string;
-  }) => void;
+  };
 }
 
-export default function AddItemModal({ visible, onClose, onAdd }: Props) {
-  const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [unit, setUnit] = useState('');
+export default function EditItemModal({ visible, onClose, onSave, onDelete, item }: Props) {
+  const [name, setName] = useState(item.name);
+  const [quantity, setQuantity] = useState(item.quantity.toString());
+  const [unit, setUnit] = useState(item.unit);
   const [showIconSelector, setShowIconSelector] = useState(false);
-  const [selectedIcon, setSelectedIcon] = useState<FoodIconType | null>(null);
+  const [showUnitSelector, setShowUnitSelector] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState<FoodIconType | null>(item.icon as FoodIconType || null);
   const [autoMatchedIcon, setAutoMatchedIcon] = useState<any>(null);
   const [customUnit, setCustomUnit] = useState('');
   const [showCustomUnitInput, setShowCustomUnitInput] = useState(false);
 
+  // Reset state when modal opens with new item
   useEffect(() => {
     if (visible) {
-      setName('');
-      setQuantity('');
-      setUnit('');
-      setSelectedIcon(null);
+      setName(item.name);
+      setQuantity(item.quantity.toString());
+      setUnit(item.unit);
+      setSelectedIcon(item.icon as FoodIconType || null);
       setCustomUnit('');
       setShowCustomUnitInput(false);
-      setAutoMatchedIcon(null);
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (name) {
-      const matchedIcon = getFoodIcon(name);
+      const matchedIcon = getFoodIcon(item.name);
       setAutoMatchedIcon(matchedIcon === FOOD_ICONS.default ? null : matchedIcon);
+      console.log('EditItemModal opened with item:', item);
     }
-  }, [name]);
+  }, [visible, item]);
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     if (!name || !quantity || !unit) return;
 
-    const item = {
+    const updatedItem = {
+      $id: item.$id,
       name,
       quantity: parseInt(quantity),
       unit,
-      icon: selectedIcon || undefined,
+      icon: selectedIcon || autoMatchedIcon || undefined,
     };
 
     try {
-      await createInventoryItem(item);
-      onAdd(item);
+      console.log('Saving item:', updatedItem);
+      console.log('Updating item with ID:', item.$id);
+      await updateInventoryItem(item.$id, updatedItem);
+      onSave(updatedItem);
       onClose();
     } catch (error) {
-      console.error('Error adding item:', error);
+      console.error('Error updating item:', error);
     }
   };
 
@@ -194,7 +203,7 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
       <View style={styles.modalContainer}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Add New Item</Text>
+            <Text style={styles.title}>Edit Item</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
@@ -220,12 +229,14 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                       placeholder="Enter item name"
                       placeholderTextColor="#666"
                     />
-                    <Image
-                      source={selectedIcon ? FOOD_ICONS[selectedIcon] : (autoMatchedIcon || FOOD_ICONS.default)}
-                      style={styles.autoIcon}
-                      resizeMode="contain"
-                      fadeDuration={0}
-                    />
+                    {(autoMatchedIcon || selectedIcon) && (
+                      <Image
+                        source={selectedIcon ? FOOD_ICONS[selectedIcon] : autoMatchedIcon}
+                        style={styles.autoIcon}
+                        resizeMode="contain"
+                        fadeDuration={0}
+                      />
+                    )}
                   </View>
                 </View>
 
@@ -289,17 +300,29 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
 
                 {showIconSelector && renderIconSelector()}
 
-                {/* Add Button */}
-                <TouchableOpacity 
-                  style={[
-                    styles.addButton,
-                    (!name || !quantity || !unit) && styles.addButtonDisabled
-                  ]}
-                  onPress={handleAdd}
-                  disabled={!name || !quantity || !unit}
-                >
-                  <Text style={styles.addButtonText}>Add Item</Text>
-                </TouchableOpacity>
+                {/* Action Buttons */}
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity 
+                    style={styles.deleteButton}
+                    onPress={() => {
+                      onDelete(item.$id);
+                      onClose();
+                    }}
+                  >
+                    <Text style={styles.deleteButtonText}>Delete Item</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[
+                      styles.saveButton,
+                      (!name || !quantity || !unit) && styles.saveButtonDisabled
+                    ]}
+                    onPress={handleSave}
+                    disabled={!name || !quantity || !unit}
+                  >
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
@@ -444,23 +467,46 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
   },
-  addButton: {
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: '#d12d2d',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#ff4444',
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+    textAlign: 'center',
+  },
+  saveButton: {
+    flex: 2,
     backgroundColor: '#4a9eff',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
     borderWidth: 3,
     borderColor: '#2d7cd1',
   },
-  addButtonDisabled: {
+  saveButtonDisabled: {
     backgroundColor: '#333',
     borderColor: '#444',
   },
-  addButtonText: {
+  saveButtonText: {
     color: 'white',
     fontSize: 14,
     fontFamily: 'SpaceMono',
+    textAlign: 'center',
   },
   keyboardAvoidingView: {
     flex: 1,

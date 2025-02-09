@@ -1,18 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, Image } from 'react-native';
+import { getFoodIcon } from '../../constants/foodIcons';
 
 const { width } = Dimensions.get('window');
-const GRID_SPACING = 12;
-const NUM_COLUMNS = 4;
+const GRID_SPACING = 16;
+const NUM_COLUMNS = 3;
 const ITEM_SIZE = (width - 40 - (GRID_SPACING * (NUM_COLUMNS - 1))) / NUM_COLUMNS;
 
 interface InventoryItem {
-  id: string;
+  $id: string;
   name: string;
   quantity: number;
   unit: string;
-  icon: string;
+  icon?: string;
 }
 
 interface Props {
@@ -27,9 +27,28 @@ export default function InventoryGrid({ items, onItemPress }: Props) {
       onPress={() => onItemPress(item)}
     >
       <View style={styles.pixelBox}>
-        <Ionicons name={item.icon as any} size={24} color="#fff" />
-        <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemQuantity}>{item.quantity} {item.unit}</Text>
+        <View style={styles.contentContainer}>
+          <Image 
+            source={getFoodIcon(item.icon || item.name)}
+            style={styles.itemIcon}
+            resizeMode="contain"
+            fadeDuration={0}
+          />
+          <Text 
+            style={styles.itemName} 
+            numberOfLines={2}
+            ellipsizeMode="tail"
+          >
+            {item.name}
+          </Text>
+          <Text 
+            style={styles.itemQuantity}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {item.quantity} {item.unit}
+          </Text>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -39,10 +58,11 @@ export default function InventoryGrid({ items, onItemPress }: Props) {
       <FlatList
         data={items}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.$id}
         numColumns={NUM_COLUMNS}
         columnWrapperStyle={styles.row}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.gridContent}
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No items yet!</Text>
@@ -58,6 +78,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  gridContent: {
+    paddingBottom: 80, // Space for floating button
+  },
   row: {
     justifyContent: 'flex-start',
     gap: GRID_SPACING,
@@ -70,25 +93,38 @@ const styles = StyleSheet.create({
   pixelBox: {
     flex: 1,
     backgroundColor: '#333',
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 3,
+    borderColor: '#444',
+  },
+  contentContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#444',
+    paddingVertical: 4,
+  },
+  itemIcon: {
+    width: 40,
+    height: 40,
+    marginBottom: 4,
   },
   itemName: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: 'SpaceMono',
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 2,
+    paddingHorizontal: 4,
+    lineHeight: 14,
   },
   itemQuantity: {
     color: '#999',
     fontSize: 10,
     fontFamily: 'SpaceMono',
     marginTop: 2,
+    maxWidth: '100%',
+    paddingHorizontal: 4,
   },
   emptyContainer: {
     flex: 1,
