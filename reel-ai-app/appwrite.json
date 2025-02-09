@@ -224,6 +224,23 @@
                     "array": false
                 },
                 {
+                    "key": "reviewsCount",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "default": 0,
+                    "array": false
+                },
+                {
+                    "key": "averageRating",
+                    "type": "double",
+                    "required": true,
+                    "min": 0,
+                    "max": 5,
+                    "default": 0,
+                    "array": false
+                },
+                {
                     "key": "createdAt",
                     "type": "datetime",
                     "required": true,
@@ -695,6 +712,96 @@
                     ],
                     "orders": [
                         "ASC"
+                    ]
+                }
+            ],
+            "enabled": true
+        },
+        {
+            "$id": "reviews",
+            "databaseId": "reel-ai-main",
+            "name": "Video Reviews",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "userId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "videoId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "rating",
+                    "type": "integer",
+                    "required": true,
+                    "min": 1,
+                    "max": 5,
+                    "array": false
+                },
+                {
+                    "key": "content",
+                    "type": "string",
+                    "size": 1000,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "updatedAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "user_video_unique",
+                    "type": "unique",
+                    "attributes": [
+                        "userId",
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC",
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "videoId",
+                    "type": "key",
+                    "attributes": [
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                },
+                {
+                    "key": "createdAt",
+                    "type": "key",
+                    "attributes": [
+                        "createdAt"
+                    ],
+                    "orders": [
+                        "DESC"
                     ]
                 }
             ],

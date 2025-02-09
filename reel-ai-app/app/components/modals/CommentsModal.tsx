@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DatabaseService, AuthService } from '../../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { formatDistanceToNow } from 'date-fns';
+import { reviewService, Review } from '../../services/reviewService';
 
 interface Comment extends Models.Document {
   userId: string;
@@ -33,13 +34,16 @@ interface CommentsModalProps {
 }
 
 export default function CommentsModal({ visible, onClose, videoId }: CommentsModalProps) {
+  const [activeTab, setActiveTab] = React.useState<'comments' | 'reviews'>('comments');
   const [newComment, setNewComment] = React.useState('');
   const [comments, setComments] = React.useState<Comment[]>([]);
+  const [reviews, setReviews] = React.useState<Review[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [userProfiles, setUserProfiles] = React.useState<Record<string, { name: string }>>({});
   const [currentUserId, setCurrentUserId] = React.useState<string>('');
   const [likedComments, setLikedComments] = React.useState<Set<string>>(new Set());
+  const [newReview, setNewReview] = React.useState({ rating: 0, content: '' });
   const slideAnim = React.useRef(new Animated.Value(0)).current;
   const { height } = Dimensions.get('window');
 
@@ -71,6 +75,34 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
     }
   };
 
+  const loadReviews = async () => {
+    try {
+      setIsLoading(true);
+      const reviewsList = await reviewService.getVideoReviews(videoId);
+      setReviews(reviewsList);
+
+      // Fetch user profiles for all reviews
+      const profiles: Record<string, { name: string }> = { ...userProfiles };
+      for (const review of reviewsList) {
+        if (!profiles[review.userId]) {
+          try {
+            const profile = await DatabaseService.getProfile(review.userId);
+            profiles[review.userId] = { name: profile.name };
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+            profiles[review.userId] = { name: 'Unknown User' };
+          }
+        }
+      }
+      setUserProfiles(profiles);
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+      Alert.alert('Error', 'Failed to load reviews. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   React.useEffect(() => {
     const checkAuth = async () => {
       const user = await AuthService.getCurrentUser();
@@ -81,7 +113,11 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
 
     if (visible) {
       checkAuth();
-      loadComments();
+      if (activeTab === 'comments') {
+        loadComments();
+      } else {
+        loadReviews();
+      }
       Animated.spring(slideAnim, {
         toValue: 1,
         useNativeDriver: true,
@@ -96,7 +132,7 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
         useNativeDriver: true,
       }).start();
     }
-  }, [visible]);
+  }, [visible, activeTab]);
 
   const handleSubmitComment = async () => {
     if (!newComment.trim()) return;
@@ -111,7 +147,6 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
 
       const response = await DatabaseService.addComment(user.$id, videoId, newComment.trim());
       
-      // Add the new comment to the list with the user's profile
       setComments(prev => [{
         ...response,
         userId: user.$id,
@@ -120,7 +155,6 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
         createdAt: new Date().toISOString()
       }, ...prev]);
 
-      // Make sure we have the user's profile
       if (!userProfiles[user.$id]) {
         const profile = await DatabaseService.getProfile(user.$id);
         setUserProfiles(prev => ({
@@ -138,6 +172,43 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
     }
   };
 
+  const handleSubmitReview = async () => {
+    if (!newReview.content.trim() || newReview.rating === 0) return;
+
+    try {
+      setIsSubmitting(true);
+      const user = await AuthService.getCurrentUser();
+      if (!user) {
+        Alert.alert('Error', 'You must be logged in to review.');
+        return;
+      }
+
+      const response = await reviewService.createReview(
+        user.$id,
+        videoId,
+        newReview.rating,
+        newReview.content.trim()
+      );
+
+      setReviews(prev => [response, ...prev]);
+
+      if (!userProfiles[user.$id]) {
+        const profile = await DatabaseService.getProfile(user.$id);
+        setUserProfiles(prev => ({
+          ...prev,
+          [user.$id]: { name: profile.name }
+        }));
+      }
+
+      setNewReview({ rating: 0, content: '' });
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      Alert.alert('Error', 'Failed to post review. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleDeleteComment = async (commentId: string) => {
     try {
       await DatabaseService.deleteComment(videoId, commentId);
@@ -145,6 +216,16 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
     } catch (error) {
       console.error('Error deleting comment:', error);
       Alert.alert('Error', 'Failed to delete comment. Please try again.');
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      await reviewService.deleteReview(reviewId, videoId);
+      setReviews(prev => prev.filter(review => review.$id !== reviewId));
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      Alert.alert('Error', 'Failed to delete review. Please try again.');
     }
   };
 
@@ -217,6 +298,21 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
     }
   };
 
+  const renderStars = (rating: number) => {
+    return (
+      <View style={styles.starsContainer}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Ionicons
+            key={star}
+            name={star <= rating ? "star" : "star-outline"}
+            size={16}
+            color={star <= rating ? "#FFD700" : "white"}
+          />
+        ))}
+      </View>
+    );
+  };
+
   const renderComment = ({ item }: { item: Comment }) => (
     <View style={styles.commentContainer}>
       <View style={styles.commentHeader}>
@@ -255,6 +351,105 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
     </View>
   );
 
+  const renderReview = ({ item }: { item: Review }) => (
+    <View style={styles.commentContainer}>
+      <View style={styles.commentHeader}>
+        <Text style={styles.username}>{userProfiles[item.userId]?.name || 'Unknown User'}</Text>
+        <Text style={styles.timeAgo}>
+          {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+        </Text>
+      </View>
+      {renderStars(item.rating)}
+      <Text style={styles.commentText}>{item.content}</Text>
+      {currentUserId === item.userId && (
+        <View style={styles.commentFooter}>
+          <TouchableOpacity 
+            style={styles.deleteButton}
+            onPress={() => handleDeleteReview(item.$id!)}
+          >
+            <Text style={styles.deleteText}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderInput = () => {
+    if (activeTab === 'comments') {
+      return (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Add a comment..."
+            placeholderTextColor="#666"
+            value={newComment}
+            onChangeText={setNewComment}
+            multiline
+            maxLength={300}
+            editable={!isSubmitting}
+          />
+          <TouchableOpacity 
+            style={[
+              styles.postButton,
+              { opacity: newComment.trim() && !isSubmitting ? 1 : 0.5 }
+            ]}
+            onPress={handleSubmitComment}
+            disabled={!newComment.trim() || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.postButtonText}>Post</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      );
+    } else {
+      return (
+        <View style={styles.reviewInputContainer}>
+          <View style={styles.ratingInput}>
+            {[1, 2, 3, 4, 5].map((star) => (
+              <TouchableOpacity
+                key={star}
+                onPress={() => setNewReview(prev => ({ ...prev, rating: star }))}
+              >
+                <Ionicons
+                  name={star <= newReview.rating ? "star" : "star-outline"}
+                  size={24}
+                  color={star <= newReview.rating ? "#FFD700" : "white"}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="Add a review..."
+            placeholderTextColor="#666"
+            value={newReview.content}
+            onChangeText={(text) => setNewReview(prev => ({ ...prev, content: text }))}
+            multiline
+            maxLength={1000}
+            editable={!isSubmitting}
+          />
+          <TouchableOpacity 
+            style={[
+              styles.postButton,
+              { opacity: newReview.content.trim() && newReview.rating > 0 && !isSubmitting ? 1 : 0.5 }
+            ]}
+            onPress={handleSubmitReview}
+            disabled={!newReview.content.trim() || newReview.rating === 0 || isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Text style={styles.postButtonText}>Post</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      );
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -285,7 +480,24 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
           ]}
         >
           <View style={styles.header}>
-            <Text style={styles.title}>Comments</Text>
+            <View style={styles.tabs}>
+              <TouchableOpacity 
+                style={[styles.tab, activeTab === 'comments' && styles.activeTab]}
+                onPress={() => setActiveTab('comments')}
+              >
+                <Text style={[styles.tabText, activeTab === 'comments' && styles.activeTabText]}>
+                  Comments
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
+                onPress={() => setActiveTab('reviews')}
+              >
+                <Text style={[styles.tabText, activeTab === 'reviews' && styles.activeTabText]}>
+                  Reviews
+                </Text>
+              </TouchableOpacity>
+            </View>
             <TouchableOpacity onPress={onClose}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
@@ -293,50 +505,31 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
           
           {isLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
+              <ActivityIndicator size="large" color="#ff4444" />
             </View>
           ) : (
-            <FlatList
-              data={comments}
-              renderItem={renderComment}
-              keyExtractor={item => item.$id}
+            <FlatList<Comment | Review>
+              data={activeTab === 'comments' ? comments : reviews}
+              renderItem={({ item }) => {
+                if (activeTab === 'comments') {
+                  return renderComment({ item: item as Comment });
+                } else {
+                  return renderReview({ item: item as Review });
+                }
+              }}
+              keyExtractor={item => item.$id!}
               contentContainerStyle={styles.commentsList}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No comments yet. Be the first to comment!</Text>
+                  <Text style={styles.emptyText}>
+                    No {activeTab} yet. Be the first to {activeTab === 'comments' ? 'comment' : 'review'}!
+                  </Text>
                 </View>
               }
             />
           )}
 
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Add a comment..."
-              placeholderTextColor="#666"
-              value={newComment}
-              onChangeText={setNewComment}
-              multiline
-              maxLength={300}
-              editable={!isSubmitting}
-            />
-            <TouchableOpacity 
-              style={[
-                styles.postButton,
-                { 
-                  opacity: newComment.trim() && !isSubmitting ? 1 : 0.5 
-                }
-              ]}
-              onPress={handleSubmitComment}
-              disabled={!newComment.trim() || isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text style={styles.postButtonText}>Post</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          {renderInput()}
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
@@ -364,10 +557,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  title: {
-    color: 'white',
-    fontSize: 18,
+  tabs: {
+    flexDirection: 'row',
+    flex: 1,
+    marginRight: 20,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#ff4444',
+  },
+  tabText: {
+    color: '#666',
+    fontSize: 16,
     fontWeight: 'bold',
+  },
+  activeTabText: {
+    color: '#ff4444',
   },
   commentsList: {
     paddingBottom: 20,
@@ -390,7 +601,7 @@ const styles = StyleSheet.create({
   },
   commentText: {
     color: 'white',
-    marginBottom: 10,
+    marginVertical: 5,
   },
   commentFooter: {
     flexDirection: 'row',
@@ -405,11 +616,15 @@ const styles = StyleSheet.create({
     color: 'white',
     marginLeft: 5,
   },
-  replyButton: {
+  deleteButton: {
     padding: 5,
   },
-  replyText: {
-    color: '#666',
+  deleteText: {
+    color: '#ff4444',
+    fontSize: 12,
+  },
+  likedCount: {
+    color: '#ff4444'
   },
   inputContainer: {
     flexDirection: 'row',
@@ -418,6 +633,26 @@ const styles = StyleSheet.create({
     borderTopColor: '#333',
     backgroundColor: '#000',
     alignItems: 'center',
+  },
+  reviewInputContainer: {
+    flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    backgroundColor: '#000',
+    alignItems: 'center',
+  },
+  ratingInput: {
+    position: 'absolute',
+    top: -32,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#000',
   },
   input: {
     flex: 1,
@@ -434,7 +669,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#007AFF',
+    backgroundColor: '#ff4444',
   },
   postButtonText: {
     color: 'white',
@@ -456,14 +691,10 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
-  deleteButton: {
-    padding: 5,
+  starsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 5,
   },
-  deleteText: {
-    color: '#ff4444',
-    fontSize: 12,
-  },
-  likedCount: {
-    color: '#ff4444'
-  }
 }); 
