@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import InventoryGrid from '../components/inventory/InventoryGrid';
@@ -28,6 +28,7 @@ export default function PantryScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [kitchenItems, setKitchenItems] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -72,6 +73,11 @@ export default function PantryScreen() {
     }
   };
 
+  // Filter items based on search query
+  const filteredItems = kitchenItems.filter(item =>
+    item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -81,12 +87,34 @@ export default function PantryScreen() {
         </View>
       </View>
 
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search ingredients..."
+          placeholderTextColor="#666"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery !== '' && (
+          <TouchableOpacity 
+            onPress={() => setSearchQuery('')}
+            style={styles.clearButton}
+          >
+            <Ionicons name="close-circle" size={20} color="#666" />
+          </TouchableOpacity>
+        )}
+      </View>
+
       <View style={styles.contentContainer}>
-        {kitchenItems.length === 0 ? (
-          <Text style={styles.emptyMessage}>No ingredients available. Add some items!</Text>
+        {filteredItems.length === 0 ? (
+          <Text style={styles.emptyMessage}>
+            {searchQuery ? 'No matching ingredients found' : 'No ingredients available. Add some items!'}
+          </Text>
         ) : (
           <InventoryGrid 
-            items={kitchenItems}
+            items={filteredItems}
             onItemPress={handleItemPress}
           />
         )}
@@ -178,5 +206,28 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     textAlign: 'center',
     marginTop: 20,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    borderRadius: 12,
+    marginBottom: 16,
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: '#444',
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: 'white',
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+    paddingVertical: 12,
+  },
+  clearButton: {
+    padding: 4,
   },
 }); 
