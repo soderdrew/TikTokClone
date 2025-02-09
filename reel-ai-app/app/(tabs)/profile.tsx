@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { AuthService, DatabaseService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
-import { VideoCard } from '../components/VideoCard';
+import { MemoizedVideoCard as VideoCard } from '../components/VideoCard';
 import EditProfileModal from '../components/modals/EditProfileModal';
 import FollowListModal from '../components/modals/FollowListModal';
 

@@ -8,7 +8,7 @@ import {
 import { useLocalSearchParams, Stack, router } from 'expo-router';
 import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
-import { VideoCard } from '../components/VideoCard';
+import { MemoizedVideoCard as VideoCard } from '../components/VideoCard';
 import BackButton from '../components/BackButton';
 
 interface Video extends Models.Document {
@@ -22,6 +22,7 @@ interface Video extends Models.Document {
   cookingTime: number;
   likesCount: number;
   commentsCount: number;
+  bookmarksCount?: number;
   userId: string;
 }
 
@@ -98,11 +99,18 @@ export default function VideoDetailScreen() {
 
       if (isLiked) {
         await DatabaseService.unlikeVideo(user.$id, id as string);
+        setVideo(prev => prev ? {
+          ...prev,
+          likesCount: Math.max(0, prev.likesCount - 1)
+        } : prev);
       } else {
         await DatabaseService.likeVideo(user.$id, id as string);
+        setVideo(prev => prev ? {
+          ...prev,
+          likesCount: prev.likesCount + 1
+        } : prev);
       }
       setIsLiked(!isLiked);
-      loadVideo(); // Reload to get updated counts
     } catch (error) {
       console.error('Error toggling like:', error);
     }
@@ -115,11 +123,18 @@ export default function VideoDetailScreen() {
 
       if (isSaved) {
         await DatabaseService.unsaveRecipe(user.$id, id as string);
+        setVideo(prev => prev ? {
+          ...prev,
+          bookmarksCount: Math.max(0, (prev.bookmarksCount || 0) - 1)
+        } : prev);
       } else {
         await DatabaseService.saveRecipe(user.$id, id as string);
+        setVideo(prev => prev ? {
+          ...prev,
+          bookmarksCount: (prev.bookmarksCount || 0) + 1
+        } : prev);
       }
       setIsSaved(!isSaved);
-      loadVideo(); // Reload to get updated counts
     } catch (error) {
       console.error('Error toggling save:', error);
     }

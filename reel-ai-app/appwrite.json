@@ -644,6 +644,61 @@
                 }
             ],
             "enabled": true
+        },
+        {
+            "$id": "inventory_items",
+            "databaseId": "reel-ai-main",
+            "name": "Inventory Items",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"users\")",
+                "update(\"users\")",
+                "delete(\"users\")"
+            ],
+            "attributes": [
+                {
+                    "key": "name",
+                    "type": "string",
+                    "size": 100,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "quantity",
+                    "type": "integer",
+                    "required": true,
+                    "min": 0,
+                    "array": false
+                },
+                {
+                    "key": "unit",
+                    "type": "string",
+                    "size": 20,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "icon",
+                    "type": "string",
+                    "size": 50,
+                    "required": false,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "name",
+                    "type": "key",
+                    "attributes": [
+                        "name"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ],
+            "enabled": true
         }
     ]
 }
