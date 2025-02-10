@@ -5,8 +5,13 @@ const DATABASE_ID = 'reel-ai-main';
 const REVIEWS_COLLECTION_ID = 'reviews';
 const VIDEOS_COLLECTION_ID = 'videos';
 
-export interface Review {
-    $id?: string;
+export interface Review extends Models.Document {
+    $id: string;
+    $collectionId: string;
+    $databaseId: string;
+    $createdAt: string;
+    $updatedAt: string;
+    $permissions: string[];
     userId: string;
     videoId: string;
     rating: number;
@@ -118,5 +123,18 @@ export const reviewService = {
                 averageRating,
             }
         );
+    },
+
+    // Get all reviews by a user
+    async getUserReviews(userId: string): Promise<Review[]> {
+        const response = await databases.listDocuments(
+            DATABASE_ID,
+            REVIEWS_COLLECTION_ID,
+            [
+                Query.equal('userId', userId),
+                Query.orderDesc('createdAt'),
+            ]
+        );
+        return response.documents as unknown as Review[];
     },
 }; 
