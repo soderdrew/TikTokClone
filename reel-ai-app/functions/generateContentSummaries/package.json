@@ -1,0 +1,18 @@
+{
+  "name": "generate-content-summaries",
+  "version": "1.0.0",
+  "description": "Generate AI summaries for comments and reviews",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "node-appwrite": "^9.0.0",
+    "openai": "^4.28.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/node": "^18.0.0"
+  }
+} 
