@@ -1199,6 +1199,15 @@ export const DatabaseService = {
             console.error('DatabaseService :: syncRecipesCount :: error', error);
             throw error;
         }
+    },
+
+    // Get a single video by ID
+    async getVideo(videoId: string): Promise<Models.Document> {
+        return await databases.getDocument(
+            DATABASE_ID,
+            COLLECTIONS.VIDEOS,
+            videoId
+        );
     }
 };
 

@@ -18,6 +18,7 @@ import { Models } from 'react-native-appwrite';
 import { MemoizedVideoCard as VideoCard } from '../components/VideoCard';
 import EditProfileModal from '../components/modals/EditProfileModal';
 import FollowListModal from '../components/modals/FollowListModal';
+import { reviewService } from '../services/reviewService';
 
 interface UserProfile extends Models.Document {
   userId: string;
@@ -43,13 +44,30 @@ interface Video extends Models.Document {
   userId: string;
 }
 
+// Add Review interface
+interface Review extends Models.Document {
+  $id: string;
+  $collectionId: string;
+  $databaseId: string;
+  $createdAt: string;
+  $updatedAt: string;
+  $permissions: string[];
+  userId: string;
+  videoId: string;
+  rating: number;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function ProfileScreen() {
   const [user, setUser] = React.useState<Models.User<Models.Preferences> | null>(null);
   const [profile, setProfile] = React.useState<UserProfile | null>(null);
   const [videos, setVideos] = React.useState<Video[]>([]);
   const [likedVideos, setLikedVideos] = React.useState<Video[]>([]);
   const [savedVideos, setSavedVideos] = React.useState<Video[]>([]);
-  const [activeTab, setActiveTab] = React.useState<'recipes' | 'liked' | 'saved'>('recipes');
+  const [reviews, setReviews] = React.useState<Review[]>([]);
+  const [activeTab, setActiveTab] = React.useState<'recipes' | 'liked' | 'saved' | 'reviews'>('recipes');
   const [isLoading, setIsLoading] = React.useState(true);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = React.useState(false);
@@ -57,11 +75,28 @@ export default function ProfileScreen() {
   const [followModalType, setFollowModalType] = React.useState<'followers' | 'following'>('followers');
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [videoTitles, setVideoTitles] = React.useState<Record<string, string>>({});
 
   // Fetch user data on component mount
   React.useEffect(() => {
     loadUserData();
   }, []);
+
+  const loadVideoTitles = async (reviewsList: Review[]) => {
+    const titles: Record<string, string> = {};
+    for (const review of reviewsList) {
+      try {
+        const video = await DatabaseService.getVideo(review.videoId);
+        if (video) {
+          titles[review.videoId] = video.title;
+        }
+      } catch (error) {
+        console.error('Error loading video title:', error);
+        titles[review.videoId] = 'Unknown Recipe';
+      }
+    }
+    setVideoTitles(titles);
+  };
 
   const loadAllVideos = async (userId: string) => {
     try {
@@ -76,6 +111,13 @@ export default function ProfileScreen() {
       // Load saved videos
       const saved = await DatabaseService.getSavedRecipes(userId);
       setSavedVideos(saved.documents as Video[]);
+
+      // Load user's reviews
+      const userReviews = await reviewService.getUserReviews(userId);
+      setReviews(userReviews);
+      
+      // Load video titles for reviews
+      await loadVideoTitles(userReviews);
     } catch (error) {
       console.error('Error loading videos:', error);
     }
@@ -173,30 +215,18 @@ export default function ProfileScreen() {
 
   const getActiveVideos = () => {
     switch (activeTab) {
+      case 'recipes':
+        return videos;
       case 'liked':
         return likedVideos;
       case 'saved':
         return savedVideos;
+      case 'reviews':
+        return []; // Reviews are rendered differently
       default:
         return videos;
     }
   };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#ff4444" />
-      </View>
-    );
-  }
-
-  if (!user || !profile) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorText}>Could not load profile</Text>
-      </View>
-    );
-  }
 
   const renderVideo = ({ item }: { item: Video }) => (
     <TouchableOpacity 
@@ -218,14 +248,67 @@ export default function ProfileScreen() {
     </TouchableOpacity>
   );
 
+  const renderReview = ({ item }: { item: Review }) => (
+    <TouchableOpacity 
+      style={styles.reviewCard}
+      onPress={() => router.push({
+        pathname: `/(video)/${item.videoId}`,
+        params: { initialTab: 'reviews' }
+      })}
+    >
+      <Text style={styles.reviewVideoTitle} numberOfLines={1}>
+        {videoTitles[item.videoId] || 'Loading...'}
+      </Text>
+      <View style={styles.reviewHeader}>
+        <View style={styles.ratingContainer}>
+          {[1, 2, 3, 4, 5].map((star) => (
+            <Ionicons
+              key={star}
+              name={star <= item.rating ? 'star' : 'star-outline'}
+              size={16}
+              color="#ff4444"
+            />
+          ))}
+        </View>
+        <Text style={styles.reviewDate}>
+          {new Date(item.createdAt).toLocaleDateString()}
+        </Text>
+      </View>
+      <Text style={styles.reviewContent}>{item.content}</Text>
+    </TouchableOpacity>
+  );
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#ff4444" />
+      </View>
+    );
+  }
+
+  if (!user || !profile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Could not load profile</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <FlatList
-        data={getActiveVideos()}
-        renderItem={renderVideo}
-        keyExtractor={item => item.$id}
-        numColumns={2}
-        columnWrapperStyle={styles.row}
+      <FlatList<Video | Review>
+        data={activeTab === 'reviews' ? reviews : getActiveVideos()}
+        renderItem={({ item }) => {
+          if (activeTab === 'reviews') {
+            return renderReview({ item: item as Review });
+          }
+          return renderVideo({ item: item as Video });
+        }}
+        keyExtractor={(item) => item.$id}
+        numColumns={activeTab === 'reviews' ? 1 : 2}
+        key={activeTab === 'reviews' ? 'reviews' : 'videos'}
+        columnWrapperStyle={activeTab !== 'reviews' ? styles.row : undefined}
+        contentContainerStyle={styles.flatListContent}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -345,6 +428,16 @@ export default function ProfileScreen() {
                     color={activeTab === 'saved' ? '#ff4444' : '#fff'} 
                   />
                 </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.tab, activeTab === 'reviews' && styles.activeTab]}
+                  onPress={() => setActiveTab('reviews')}
+                >
+                  <Ionicons 
+                    name="star-outline" 
+                    size={24} 
+                    color={activeTab === 'reviews' ? '#ff4444' : '#fff'} 
+                  />
+                </TouchableOpacity>
               </View>
             </Animated.View>
           </>
@@ -354,7 +447,8 @@ export default function ProfileScreen() {
             <Text style={styles.emptyStateText}>
               {activeTab === 'recipes' ? 'No recipes posted yet' :
                activeTab === 'liked' ? 'No liked videos yet' :
-               'No saved recipes yet'}
+               activeTab === 'saved' ? 'No saved recipes yet' :
+               'No reviews posted yet'}
             </Text>
             {/* {activeTab === 'recipes' && (
               <TouchableOpacity 
@@ -368,7 +462,6 @@ export default function ProfileScreen() {
             )} */}
           </View>
         }
-        contentContainerStyle={styles.flatListContent}
       />
 
       {/* Edit Profile Modal */}
@@ -404,6 +497,8 @@ const styles = StyleSheet.create({
   },
   flatListContent: {
     flexGrow: 1,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,
@@ -517,13 +612,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     paddingHorizontal: HORIZONTAL_PADDING,
+    marginBottom: CARD_GAP,
   },
   videoCard: {
     width: CARD_WIDTH,
     backgroundColor: '#1a1a1a',
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: CARD_GAP,
   },
   thumbnail: {
     width: '100%',
@@ -559,5 +654,37 @@ const styles = StyleSheet.create({
   activeTab: {
     borderBottomWidth: 2,
     borderBottomColor: '#ff4444',
+  },
+  reviewCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    marginHorizontal: HORIZONTAL_PADDING,
+  },
+  reviewVideoTitle: {
+    color: '#ff4444',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  reviewDate: {
+    color: '#666',
+    fontSize: 12,
+  },
+  reviewContent: {
+    color: '#fff',
+    fontSize: 14,
+    lineHeight: 20,
   },
 }); 
