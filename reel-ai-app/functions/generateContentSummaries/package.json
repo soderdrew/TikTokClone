@@ -5,14 +5,14 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "node-appwrite": "^9.0.0",
-    "openai": "^4.28.0"
-  },
-  "devDependencies": {
+    "openai": "^4.28.0",
     "typescript": "^5.0.0",
     "@types/node": "^18.0.0"
-  }
+  },
+  "type": "module"
 } 
