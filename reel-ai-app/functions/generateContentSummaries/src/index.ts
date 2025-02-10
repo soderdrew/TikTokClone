@@ -30,7 +30,7 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
-export default async function generateContentSummaries(req: any, res: any) {
+async function generateContentSummaries(req: any, res: any) {
     try {
         const { videoId } = JSON.parse(req.payload);
         
@@ -113,4 +113,6 @@ export default async function generateContentSummaries(req: any, res: any) {
             error: error.message
         }, 500);
     }
-} 
+}
+
+module.exports = generateContentSummaries; 
