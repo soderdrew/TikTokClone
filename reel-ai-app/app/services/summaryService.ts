@@ -41,15 +41,22 @@ export const summaryService = {
   // Generate new summaries using the cloud function
   generateSummaries: async (videoId: string): Promise<VideoSummary | null> => {
     try {
+      console.log('Generating summaries for video:', videoId);
       const execution = await functions.createExecution(
         'generateSummariesId',
         JSON.stringify({ videoId })
       );
 
+      console.log('Function execution response:', execution);
+
       if (execution.status === 'completed' && execution.responseBody) {
         const response = JSON.parse(execution.responseBody);
+        console.log('Parsed response:', response);
+        
         if (response.success) {
           return await summaryService.getSummary(videoId);
+        } else {
+          console.error('Function returned error:', response.error);
         }
       }
       

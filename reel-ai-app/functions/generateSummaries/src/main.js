@@ -141,10 +141,17 @@ export default async ({ req, res, log, error }) => {
       error(`API Response: ${JSON.stringify(err.response.data)}`);
     }
     error(`Stack trace: ${err.stack}`);
+    
+    // Return more detailed error information
     return res.json({
       success: false,
       message: 'Failed to generate summaries',
-      error: err.message
+      error: {
+        message: err.message,
+        type: err.constructor.name,
+        response: err.response ? err.response.data : null,
+        stack: err.stack
+      }
     }, 500);
   }
 };
