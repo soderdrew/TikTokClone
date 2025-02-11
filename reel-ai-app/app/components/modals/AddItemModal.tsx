@@ -11,6 +11,7 @@ import {
   Image,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
@@ -48,7 +49,8 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
 
-  const audioService = new AudioService();
+  // Use useRef to persist the AudioService instance
+  const audioService = React.useRef(new AudioService()).current;
 
   useEffect(() => {
     if (visible) {
@@ -96,8 +98,16 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
 
   const startRecording = async () => {
     try {
+      if (isRecording) {
+        console.log('Already recording, ignoring start request');
+        return;
+      }
+      console.log('Starting recording...');
       setIsRecording(true);
-      await audioService.startRecording();
+      const success = await audioService.startRecording();
+      if (!success) {
+        setIsRecording(false);
+      }
     } catch (error) {
       console.error('Failed to start recording:', error);
       setIsRecording(false);
@@ -105,17 +115,72 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
   };
 
   const stopRecording = async () => {
+    let audioUri: string | null = null;
     try {
-      const audioUri = await audioService.stopRecording();
-      setIsRecording(false);
-      setIsTranscribing(true);
+      if (!isRecording) {
+        console.log('Not recording, ignoring stop request');
+        return;
+      }
 
-      const transcription = await audioService.transcribeAudio(audioUri);
-      setName(transcription);
+      console.log('Stopping recording...');
+      audioUri = await audioService.stopRecording();
+      setIsRecording(false);
+      
+      if (audioUri) {
+        setIsTranscribing(true);
+        console.log('Transcribing audio...');
+        try {
+          const transcription = await audioService.transcribeAudio(audioUri);
+          if (transcription && transcription.trim()) {
+            setName(transcription.trim());
+          } else {
+            console.log('No transcription received');
+          }
+        } catch (transcriptionError) {
+          console.error('Transcription failed:', transcriptionError);
+          Alert.alert(
+            'Transcription Failed',
+            'Failed to transcribe the audio. Please try again.'
+          );
+        }
+      }
     } catch (error) {
       console.error('Failed to process recording:', error);
+      Alert.alert(
+        'Recording Failed',
+        'Failed to process the recording. Please try again.'
+      );
     } finally {
+      setIsRecording(false);
       setIsTranscribing(false);
+    }
+  };
+
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup when modal closes
+      if (isRecording) {
+        stopRecording().catch(console.error);
+      }
+    };
+  }, [isRecording]);
+
+  const handleRecordPress = async () => {
+    try {
+      if (isRecording) {
+        await stopRecording();
+      } else {
+        await startRecording();
+      }
+    } catch (error) {
+      console.error('Error handling record press:', error);
+      setIsRecording(false);
+      setIsTranscribing(false);
+      Alert.alert(
+        'Recording Error',
+        'An error occurred while recording. Please try again.'
+      );
     }
   };
 
@@ -253,8 +318,7 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                       editable={!isRecording && !isTranscribing}
                     />
                     <TouchableOpacity
-                      onPressIn={startRecording}
-                      onPressOut={stopRecording}
+                      onPress={handleRecordPress}
                       style={[
                         styles.micButton,
                         isRecording && styles.micButtonRecording

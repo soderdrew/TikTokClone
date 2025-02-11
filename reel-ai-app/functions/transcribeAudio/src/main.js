@@ -1,4 +1,7 @@
 import OpenAI from 'openai';
+import fs from 'fs';
+import { Readable } from 'stream';
+import { Buffer } from 'buffer';
 
 export default async ({ req, res, log, error }) => {
   try {
@@ -10,7 +13,7 @@ export default async ({ req, res, log, error }) => {
     }
 
     const data = JSON.parse(req.body);
-    log('Received request body:', data);
+    log('Received request body');
 
     if (!data.audioBase64) {
       return res.json({
@@ -35,24 +38,43 @@ export default async ({ req, res, log, error }) => {
     // Convert base64 to buffer
     const audioBuffer = Buffer.from(data.audioBase64, 'base64');
 
-    // Create a temporary file with the audio data
-    const tempFile = new File([audioBuffer], 'audio.m4a', { type: 'audio/m4a' });
+    // Create a temporary file path
+    const tempFilePath = '/tmp/audio.m4a';
 
-    // Transcribe using Whisper API
-    const transcription = await openai.audio.transcriptions.create({
-      file: tempFile,
-      model: "whisper-1",
-      language: "en",
-      response_format: "json",
-      prompt: "This is a list of ingredients and their quantities for a recipe."
-    });
+    // Write the buffer to a temporary file
+    fs.writeFileSync(tempFilePath, audioBuffer);
 
-    log('Transcription completed successfully');
+    try {
+      // Create a file object from the temporary file
+      const file = fs.createReadStream(tempFilePath);
 
-    return res.json({
-      success: true,
-      text: transcription.text
-    });
+      // Transcribe using Whisper API
+      const transcription = await openai.audio.transcriptions.create({
+        file: file,
+        model: "whisper-1",
+        language: "en",
+        response_format: "json",
+        prompt: "This is a list of ingredients and their quantities for a recipe."
+      });
+
+      // Clean up the temporary file
+      fs.unlinkSync(tempFilePath);
+
+      log('Transcription completed successfully');
+      return res.json({
+        success: true,
+        text: transcription.text
+      });
+    } finally {
+      // Ensure we clean up the temp file even if transcription fails
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+      } catch (cleanupError) {
+        error('Failed to clean up temporary file:', cleanupError);
+      }
+    }
 
   } catch (err) {
     error(`Error details: ${err.message}`);
