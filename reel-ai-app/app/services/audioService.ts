@@ -105,7 +105,7 @@ export class AudioService {
     }
   }
 
-  async transcribeAudio(audioUri: string): Promise<string> {
+  async transcribeAudio(audioUri: string): Promise<{ text: string, items: Array<{ name: string, quantity: number, unit: string }> }> {
     try {
       console.log('Reading audio file..');
       if (!await FileSystem.getInfoAsync(audioUri).then(info => info.exists)) {
@@ -130,7 +130,10 @@ export class AudioService {
         throw new Error(response.message || 'Failed to transcribe audio');
       }
 
-      return response.text;
+      return {
+        text: response.text,
+        items: response.items || []
+      };
     } catch (err) {
       console.error('Failed to transcribe audio:', err);
       throw err;
