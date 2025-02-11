@@ -59,16 +59,16 @@ export default async ({ req, res, log, error }) => {
 
       // Parse the transcription into structured items using GPT
       const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
             content: `You are a helpful assistant that parses ingredient lists into structured data.
-            Extract ingredients with their quantities and units from the text.
+            Extract ingredients with their quantities and units from the text and return them in JSON format.
             If a quantity is not specified, assume 1.
             If a unit is not specified, use a sensible default unit based on the ingredient type.
             
-            Expected output format:
+            You must respond with a valid JSON object in the following format:
             {
               "items": [
                 {
@@ -81,7 +81,7 @@ export default async ({ req, res, log, error }) => {
             }
             
             Example input: "I have three gallons of milk and two slices of bread"
-            Example output: {
+            Example JSON output: {
               "items": [
                 {
                   "name": "milk",

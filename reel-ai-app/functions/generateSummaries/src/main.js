@@ -75,7 +75,7 @@ export default async ({ req, res, log, error }) => {
       log('Generating comments summary...');
       const commentsText = comments.documents.map(doc => doc.content).join('\n');
       const commentsCompletion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -104,7 +104,7 @@ export default async ({ req, res, log, error }) => {
       ).join('\n\n');
       
       const reviewsCompletion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
