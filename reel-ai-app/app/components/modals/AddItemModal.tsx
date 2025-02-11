@@ -114,6 +114,18 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
     }
   };
 
+  // Add cleanup effect
+  useEffect(() => {
+    let mounted = true;
+    return () => {
+      mounted = false;
+      // Only cleanup if we're still recording when unmounting
+      if (isRecording) {
+        audioService.stopRecording().catch(console.error);
+      }
+    };
+  }, []);
+
   const stopRecording = async () => {
     let audioUri: string | null = null;
     try {
@@ -123,8 +135,8 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
       }
 
       console.log('Stopping recording...');
+      setIsRecording(false); // Set this first to prevent double-stops
       audioUri = await audioService.stopRecording();
-      setIsRecording(false);
       
       if (audioUri) {
         setIsTranscribing(true);
@@ -155,16 +167,6 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
       setIsTranscribing(false);
     }
   };
-
-  // Add cleanup effect
-  useEffect(() => {
-    return () => {
-      // Cleanup when modal closes
-      if (isRecording) {
-        stopRecording().catch(console.error);
-      }
-    };
-  }, [isRecording]);
 
   const handleRecordPress = async () => {
     try {
