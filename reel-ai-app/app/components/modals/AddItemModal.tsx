@@ -12,7 +12,6 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
@@ -39,140 +38,62 @@ interface Props {
 }
 
 export default function AddItemModal({ visible, onClose, onAdd }: Props) {
-  const [transcribedItems, setTranscribedItems] = useState<Array<{
-    name: string;
-    quantity: number;
-    unit: string;
-    icon?: string;
-    accepted?: boolean;
-  }>>([]);
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [name, setName] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [unit, setUnit] = useState('');
+  const [showIconSelector, setShowIconSelector] = useState(false);
+  const [selectedIcon, setSelectedIcon] = useState<FoodIconType | null>(null);
+  const [autoMatchedIcon, setAutoMatchedIcon] = useState<any>(null);
+  const [customUnit, setCustomUnit] = useState('');
+  const [showCustomUnitInput, setShowCustomUnitInput] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [showAcceptAllButton, setShowAcceptAllButton] = useState(false);
 
   // Use useRef to persist the AudioService instance
   const audioService = React.useRef(new AudioService()).current;
 
   useEffect(() => {
     if (visible) {
-      setTranscribedItems([]);
-      setCurrentItemIndex(0);
-      setShowAcceptAllButton(false);
+      setName('');
+      setQuantity('');
+      setUnit('');
+      setSelectedIcon(null);
+      setCustomUnit('');
+      setShowCustomUnitInput(false);
+      setAutoMatchedIcon(null);
     }
   }, [visible]);
 
   useEffect(() => {
-    if (transcribedItems.length > 0) {
-      // Auto-match icons for all items
-      const itemsWithIcons = transcribedItems.map(item => ({
-        ...item,
-        icon: getFoodIcon(item.name),
-      }));
-      setTranscribedItems(itemsWithIcons);
-      setShowAcceptAllButton(true);
+    if (name) {
+      const matchedIcon = getFoodIcon(name);
+      setAutoMatchedIcon(matchedIcon === FOOD_ICONS.default ? null : matchedIcon);
     }
-  }, [transcribedItems.length]);
+  }, [name]);
 
-  const handleAdd = async (item: typeof transcribedItems[0]) => {
-    if (!item.name || !item.quantity || !item.unit) return;
+  const handleAdd = async () => {
+    if (!name || !quantity || !unit) return;
+
+    const item = {
+      name,
+      quantity: parseInt(quantity),
+      unit,
+      icon: selectedIcon || undefined,
+    };
 
     try {
-      await createInventoryItem({
-        name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        icon: item.icon,
-      });
-      
-      // Mark item as accepted
-      const updatedItems = transcribedItems.map((i, index) => 
-        index === currentItemIndex ? { ...i, accepted: true } : i
-      );
-      setTranscribedItems(updatedItems);
-
-      // Move to next unaccepted item if available
-      const nextUnacceptedIndex = updatedItems.findIndex((item, index) => 
-        index > currentItemIndex && !item.accepted
-      );
-      if (nextUnacceptedIndex !== -1) {
-        setCurrentItemIndex(nextUnacceptedIndex);
-      }
-
-      // Check if all items are accepted
-      if (updatedItems.every(item => item.accepted)) {
+      await createInventoryItem(item);
+      onAdd(item);
       onClose();
-      }
     } catch (error) {
       console.error('Error adding item:', error);
-      Alert.alert('Error', 'Failed to add item to inventory');
     }
   };
 
-  const handleAcceptAll = async () => {
-    try {
-      for (const item of transcribedItems) {
-        if (!item.accepted) {
-          await createInventoryItem({
-            name: item.name,
-            quantity: item.quantity,
-            unit: item.unit,
-            icon: item.icon,
-          });
-        }
-      }
-      onClose();
-    } catch (error) {
-      console.error('Error adding items:', error);
-      Alert.alert('Error', 'Failed to add some items to inventory');
-    }
-  };
-
-  const stopRecording = async () => {
-    let audioUri: string | null = null;
-    try {
-      if (!isRecording) {
-        console.log('Not recording, ignoring stop request');
-        return;
-      }
-
-      console.log('Stopping recording...');
-      setIsRecording(false);
-      audioUri = await audioService.stopRecording();
-      
-      if (audioUri) {
-        setIsTranscribing(true);
-        console.log('Transcribing audio...');
-        try {
-          const result = await audioService.transcribeAudio(audioUri);
-          if (result.items && result.items.length > 0) {
-            setTranscribedItems(result.items);
-            setCurrentItemIndex(0);
-          } else {
-            console.log('No items transcribed');
-            Alert.alert(
-              'No Items Found',
-              'No items were detected in the recording. Please try again and speak clearly.'
-            );
-          }
-        } catch (transcriptionError) {
-          console.error('Transcription failed:', transcriptionError);
-          Alert.alert(
-            'Transcription Failed',
-            'Failed to transcribe the audio. Please try again.'
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Failed to process recording:', error);
-      Alert.alert(
-        'Recording Failed',
-        'Failed to process the recording. Please try again.'
-      );
-    } finally {
-      setIsRecording(false);
-      setIsTranscribing(false);
-    }
+  const handleQuantityChange = (change: number) => {
+    const currentQty = parseInt(quantity) || 0;
+    const newQty = Math.max(0, currentQty + change);
+    setQuantity(newQty.toString());
   };
 
   const startRecording = async () => {
@@ -205,6 +126,55 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
     };
   }, []);
 
+  const stopRecording = async () => {
+    let audioUri: string | null = null;
+    try {
+      if (!isRecording) {
+        console.log('Not recording, ignoring stop request');
+        return;
+      }
+
+      console.log('Stopping recording...');
+      setIsRecording(false); // Set this first to prevent double-stops
+      audioUri = await audioService.stopRecording();
+      
+      if (audioUri) {
+        setIsTranscribing(true);
+        console.log('Transcribing audio...');
+        try {
+          const { text, items } = await audioService.transcribeAudio(audioUri);
+          if (items && items.length > 0) {
+            // Use the first item from the structured response
+            const firstItem = items[0];
+            setName(firstItem.name);
+            setQuantity(firstItem.quantity.toString());
+            setUnit(firstItem.unit);
+          } else if (text) {
+            // Fallback to using raw text if no structured items
+            setName(text);
+          } else {
+            console.log('No transcription received');
+          }
+        } catch (transcriptionError) {
+          console.error('Transcription failed:', transcriptionError);
+          Alert.alert(
+            'Transcription Failed',
+            'Failed to transcribe the audio. Please try again.'
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to process recording:', error);
+      Alert.alert(
+        'Recording Failed',
+        'Failed to process the recording. Please try again.'
+      );
+    } finally {
+      setIsRecording(false);
+      setIsTranscribing(false);
+    }
+  };
+
   const handleRecordPress = async () => {
     try {
       if (isRecording) {
@@ -223,62 +193,97 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
     }
   };
 
-  const renderCurrentItem = () => {
-    if (transcribedItems.length === 0) return null;
-    
-    const item = transcribedItems[currentItemIndex];
-    if (!item) return null;
+  const renderIconSelector = () => {
+    const iconEntries = Object.entries(FOOD_ICONS).filter(([key]) => key !== 'default') as [FoodIconType, any][];
 
     return (
-      <View style={styles.itemContainer}>
-        <View style={styles.itemHeader}>
-          <Text style={styles.itemCount}>
-            Item {currentItemIndex + 1} of {transcribedItems.length}
-          </Text>
-          {showAcceptAllButton && (
+      <View style={styles.iconSelectorContainer}>
+        <Text style={styles.label}>Choose an Icon</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.iconGrid}
+        >
+          {iconEntries.map(([key, icon]) => (
             <TouchableOpacity
-              style={styles.acceptAllButton}
-              onPress={handleAcceptAll}
+              key={key}
+              style={[
+                styles.iconOption,
+                selectedIcon === key && styles.selectedIconOption
+              ]}
+              onPress={() => setSelectedIcon(key)}
             >
-              <Text style={styles.acceptAllText}>Accept All</Text>
+              <Image
+                source={icon}
+                style={styles.iconPreview}
+                resizeMode="contain"
+                fadeDuration={0}
+              />
             </TouchableOpacity>
-          )}
+          ))}
+        </ScrollView>
       </View>
+    );
+  };
 
-        <View style={styles.itemContent}>
-          <Image
-            source={item.icon ? FOOD_ICONS[item.icon as FoodIconType] : FOOD_ICONS.default}
-            style={styles.itemIcon}
-            resizeMode="contain"
-          />
-          <View style={styles.itemDetails}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemQuantity}>
-              {item.quantity} {item.unit}
+  const renderUnitSelector = () => {
+    return (
+      <View style={styles.unitSelectorContainer}>
+        {Object.entries(UNITS).map(([category, units]) => (
+          <View key={category} style={styles.unitCategory}>
+            <Text style={styles.unitCategoryTitle}>{category}</Text>
+            <View style={styles.unitGrid}>
+              {units.map((unitOption) => (
+                <TouchableOpacity
+                  key={unitOption}
+                  style={[
+                    styles.unitOption,
+                    unit === unitOption && styles.selectedUnitOption
+                  ]}
+                  onPress={() => setUnit(unitOption)}
+                >
+                  <Text style={[
+                    styles.unitOptionText,
+                    unit === unitOption && styles.selectedUnitOptionText
+                  ]}>
+                    {unitOption}
                   </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        ))}
 
-        <View style={styles.itemActions}>
+        <View style={styles.customUnitContainer}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.rejectButton]}
-            onPress={() => {
-              const nextIndex = currentItemIndex + 1;
-              if (nextIndex < transcribedItems.length) {
-                setCurrentItemIndex(nextIndex);
-              } else {
-                onClose();
-              }
-            }}
+            style={[
+              styles.customUnitButton,
+              showCustomUnitInput && styles.selectedUnitOption
+            ]}
+            onPress={() => setShowCustomUnitInput(!showCustomUnitInput)}
           >
-            <Text style={styles.actionButtonText}>Skip</Text>
+            <Text style={[
+              styles.unitOptionText,
+              showCustomUnitInput && styles.selectedUnitOptionText
+            ]}>
+              Custom Unit
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.acceptButton]}
-            onPress={() => handleAdd(item)}
-          >
-            <Text style={styles.actionButtonText}>Accept</Text>
-          </TouchableOpacity>
+
+          {showCustomUnitInput && (
+            <View style={styles.customUnitInputContainer}>
+              <TextInput
+                style={[styles.input, styles.customUnitInput]}
+                value={customUnit}
+                onChangeText={(text) => {
+                  setCustomUnit(text);
+                  setUnit(text);
+                }}
+                placeholder="Enter custom unit"
+                placeholderTextColor="#666"
+              />
+            </View>
+          )}
         </View>
       </View>
     );
@@ -286,49 +291,144 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
 
   return (
     <Modal
-      animationType="slide"
-      transparent={true}
       visible={visible}
+      transparent
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.modalContainer}
-      >
-        <View style={styles.modalContent}>
+      <View style={styles.modalContainer}>
+        <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Add Items</Text>
+            <Text style={styles.title}>Add New Item</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#000" />
+              <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
           </View>
 
-          {transcribedItems.length === 0 ? (
-            <View style={styles.recordingContainer}>
-              <Text style={styles.instructions}>
-                Press and hold the microphone button to record your items
-              </Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingView}
+          >
+            <ScrollView 
+              style={styles.scrollContainer}
+              contentContainerStyle={styles.scrollContentContainer}
+            >
+              <View style={styles.form}>
+                {/* Name Input */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Item Name</Text>
+                  <View style={styles.nameInputContainer}>
+                    <TextInput
+                      style={[styles.input, styles.nameInput]}
+                      value={name}
+                      onChangeText={setName}
+                      placeholder="Enter item name"
+                      placeholderTextColor="#666"
+                      editable={!isRecording && !isTranscribing}
+                    />
+                    <TouchableOpacity
+                      onPress={handleRecordPress}
+                      style={[
+                        styles.micButton,
+                        isRecording && styles.micButtonRecording
+                      ]}
+                      disabled={isTranscribing}
+                    >
+                      {isTranscribing ? (
+                        <ActivityIndicator color="white" size="small" />
+                      ) : (
+                        <Ionicons
+                          name={isRecording ? "radio" : "mic"}
+                          size={24}
+                          color="white"
+                        />
+                      )}
+                    </TouchableOpacity>
+                    <Image
+                      source={selectedIcon ? FOOD_ICONS[selectedIcon] : (autoMatchedIcon || FOOD_ICONS.default)}
+                      style={styles.autoIcon}
+                      resizeMode="contain"
+                      fadeDuration={0}
+                    />
+                  </View>
+                </View>
+
+                {/* Quantity Controls */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Quantity</Text>
+                  <View style={styles.quantityContainer}>
                     <TouchableOpacity 
-                onPress={handleRecordPress}
-                style={[styles.micButton, isRecording && styles.micButtonRecording]}
-                disabled={isTranscribing}
-              >
-                {isTranscribing ? (
-                  <ActivityIndicator color="white" size="small" />
-                ) : (
+                      style={styles.quantityButton}
+                      onPress={() => handleQuantityChange(-1)}
+                    >
+                      <Ionicons name="remove" size={24} color="white" />
+                    </TouchableOpacity>
+                    
+                    <TextInput
+                      style={[styles.input, styles.quantityInput]}
+                      value={quantity}
+                      onChangeText={setQuantity}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#666"
+                    />
+
+                    <TouchableOpacity 
+                      style={styles.quantityButton}
+                      onPress={() => handleQuantityChange(1)}
+                    >
+                      <Ionicons name="add" size={24} color="white" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Unit Selector */}
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Unit</Text>
+                  {renderUnitSelector()}
+                </View>
+
+                {/* Icon Selector */}
+                <TouchableOpacity
+                  style={styles.iconSelectorButton}
+                  onPress={() => setShowIconSelector(!showIconSelector)}
+                >
+                  <View style={styles.iconSelectorContent}>
+                    <Image
+                      source={selectedIcon ? FOOD_ICONS[selectedIcon] : (autoMatchedIcon || FOOD_ICONS.default)}
+                      style={styles.iconSelectorPreview}
+                      resizeMode="contain"
+                      fadeDuration={0}
+                    />
+                    <Text style={styles.iconSelectorButtonText}>
+                      {showIconSelector ? 'Hide Icon Selector' : 'Change Icon'}
+                    </Text>
+                  </View>
                   <Ionicons 
-                    name={isRecording ? "radio" : "mic"}
-                    size={24}
+                    name={showIconSelector ? 'chevron-up' : 'chevron-down'} 
+                    size={20} 
                     color="white" 
                   />
-                )}
+                </TouchableOpacity>
+
+                {showIconSelector && renderIconSelector()}
+
+                {/* Add Button */}
+                <TouchableOpacity 
+                  style={[
+                    styles.addButton,
+                    (!name || !quantity || !unit) && styles.addButtonDisabled
+                  ]}
+                  onPress={handleAdd}
+                  disabled={!name || !quantity || !unit}
+                >
+                  <Text style={styles.addButtonText}>Add Item</Text>
                 </TouchableOpacity>
               </View>
-          ) : (
-            renderCurrentItem()
-          )}
+            </ScrollView>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -337,114 +437,236 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
-  modalContent: {
-    backgroundColor: 'white',
+  content: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    marginTop: 60,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '80%',
+    borderWidth: 3,
+    borderColor: '#333',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
+    color: 'white',
+    fontFamily: 'SpaceMono',
   },
   closeButton: {
-    padding: 5,
+    padding: 8,
   },
-  recordingContainer: {
+  form: {
+    gap: 16,
+  },
+  inputContainer: {
+    gap: 8,
+  },
+  nameInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameInput: {
+    flex: 1,
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quantityInput: {
+    flex: 1,
+    textAlign: 'center',
+  },
+  quantityButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#4a9eff',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
+    borderWidth: 2,
+    borderColor: '#2d7cd1',
   },
-  instructions: {
+  autoIcon: {
+    width: 28,
+    height: 28,
+    marginLeft: 4,
+  },
+  label: {
+    color: '#999',
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+  },
+  input: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    color: 'white',
+    fontFamily: 'SpaceMono',
+    borderWidth: 2,
+    borderColor: '#444',
+  },
+  iconSelectorButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 2,
+    borderColor: '#444',
+  },
+  iconSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconSelectorPreview: {
+    width: 24,
+    height: 24,
+  },
+  iconSelectorButtonText: {
+    color: 'white',
+    fontFamily: 'SpaceMono',
+    fontSize: 14,
+  },
+  iconSelectorContainer: {
+    gap: 8,
+  },
+  iconGrid: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  iconOption: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#333',
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#444',
+  },
+  selectedIconOption: {
+    borderColor: '#4a9eff',
+    backgroundColor: '#2d7cd1',
+  },
+  iconPreview: {
+    width: 32,
+    height: 32,
+  },
+  addButton: {
+    backgroundColor: '#4a9eff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 3,
+    borderColor: '#2d7cd1',
+  },
+  addButtonDisabled: {
+    backgroundColor: '#333',
+    borderColor: '#444',
+  },
+  addButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContentContainer: {
+    padding: 20,
+    paddingTop: 12,
+  },
+  unitSelectorContainer: {
+    gap: 16,
+  },
+  unitCategory: {
+    gap: 8,
+  },
+  unitCategoryTitle: {
+    color: '#999',
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    textTransform: 'uppercase',
+  },
+  unitGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  unitOption: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 8,
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: '#444',
+    minWidth: 60,
+  },
+  selectedUnitOption: {
+    borderColor: '#4a9eff',
+    backgroundColor: '#2d7cd1',
+  },
+  unitOptionText: {
+    color: 'white',
+    fontFamily: 'SpaceMono',
+    fontSize: 12,
     textAlign: 'center',
-    marginBottom: 20,
-    color: '#666',
+  },
+  selectedUnitOptionText: {
+    color: 'white',
+  },
+  customUnitContainer: {
+    gap: 8,
+    marginTop: 8,
+  },
+  customUnitButton: {
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 8,
+    paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: '#444',
+    alignSelf: 'flex-start',
+  },
+  customUnitInputContainer: {
+    width: '100%',
+  },
+  customUnitInput: {
+    width: '100%',
   },
   micButton: {
-    backgroundColor: '#007AFF',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4a9eff',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    borderWidth: 2,
+    borderColor: '#2d7cd1',
   },
   micButtonRecording: {
-    backgroundColor: '#FF3B30',
-  },
-  itemContainer: {
-    padding: 15,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  itemCount: {
-    fontSize: 16,
-    color: '#666',
-  },
-  acceptAllButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 15,
-  },
-  acceptAllText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  itemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  itemIcon: {
-    width: 50,
-    height: 50,
-    marginRight: 15,
-  },
-  itemDetails: {
-    flex: 1,
-  },
-  itemName: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 5,
-  },
-  itemQuantity: {
-    fontSize: 16,
-    color: '#666',
-  },
-  itemActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  rejectButton: {
-    backgroundColor: '#FF3B30',
-  },
-  acceptButton: {
-    backgroundColor: '#34C759',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#ff4444',
+    borderColor: '#cc3333',
   },
 }); 

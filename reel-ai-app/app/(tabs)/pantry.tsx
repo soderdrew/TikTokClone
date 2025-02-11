@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import InventoryGrid from '../components/inventory/InventoryGrid';
 import AddItemModal from '../components/modals/AddItemModal';
 import EditItemModal from '../components/modals/EditItemModal';
+import VoiceItemsModal from '../components/modals/VoiceItemsModal';
 import { getInventoryItems, deleteInventoryItem } from '../services/inventoryService';
 
 const { width } = Dimensions.get('window');
@@ -25,6 +26,8 @@ const mockKitchenItems = [
 export default function PantryScreen() {
   const router = useRouter();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [showInputTypeModal, setShowInputTypeModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [kitchenItems, setKitchenItems] = useState<any[]>([]);
@@ -73,9 +76,57 @@ export default function PantryScreen() {
     }
   };
 
+  const handleAddItems = (items: any[]) => {
+    setKitchenItems((prevItems) => [...prevItems, ...items]);
+  };
+
   // Filter items based on search query
   const filteredItems = kitchenItems.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const renderInputTypeModal = () => (
+    <Modal
+      visible={showInputTypeModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowInputTypeModal(false)}
+    >
+      <View style={styles.inputTypeModalContainer}>
+        <View style={styles.inputTypeContent}>
+          <Text style={styles.inputTypeTitle}>Add Items</Text>
+          
+          <TouchableOpacity 
+            style={styles.inputTypeOption}
+            onPress={() => {
+              setShowInputTypeModal(false);
+              setShowAddModal(true);
+            }}
+          >
+            <Ionicons name="create-outline" size={32} color="white" />
+            <Text style={styles.inputTypeText}>Manual Entry</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.inputTypeOption}
+            onPress={() => {
+              setShowInputTypeModal(false);
+              setShowVoiceModal(true);
+            }}
+          >
+            <Ionicons name="mic-outline" size={32} color="white" />
+            <Text style={styles.inputTypeText}>Voice Input</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.cancelButton}
+            onPress={() => setShowInputTypeModal(false)}
+          >
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 
   return (
@@ -121,15 +172,23 @@ export default function PantryScreen() {
 
         <TouchableOpacity 
           style={styles.floatingAddButton}
-          onPress={() => setShowAddModal(true)}
+          onPress={() => setShowInputTypeModal(true)}
         >
           <Ionicons name="add" size={32} color="white" />
         </TouchableOpacity>
+
+        {renderInputTypeModal()}
 
         <AddItemModal
           visible={showAddModal}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddItem}
+        />
+
+        <VoiceItemsModal
+          visible={showVoiceModal}
+          onClose={() => setShowVoiceModal(false)}
+          onAddItems={handleAddItems}
         />
 
         {selectedItem && (
@@ -229,5 +288,54 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: 4,
+  },
+  inputTypeModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  inputTypeContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 3,
+    borderColor: '#333',
+    gap: 16,
+  },
+  inputTypeTitle: {
+    fontSize: 24,
+    color: 'white',
+    fontFamily: 'SpaceMono',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  inputTypeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    padding: 16,
+    borderRadius: 12,
+    gap: 16,
+    borderWidth: 2,
+    borderColor: '#444',
+  },
+  inputTypeText: {
+    color: 'white',
+    fontSize: 18,
+    fontFamily: 'SpaceMono',
+  },
+  cancelButton: {
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#999',
+    fontSize: 16,
+    fontFamily: 'SpaceMono',
   },
 }); 

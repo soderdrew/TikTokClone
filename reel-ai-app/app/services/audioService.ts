@@ -10,6 +10,19 @@ const client = new Client()
 
 const functions = new Functions(client);
 
+interface TranscribedItem {
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
+interface TranscriptionResponse {
+  success: boolean;
+  text: string;
+  items: TranscribedItem[];
+  message?: string;
+}
+
 export class AudioService {
   private recording: Audio.Recording | null = null;
   private isRecording: boolean = false;
@@ -105,7 +118,7 @@ export class AudioService {
     }
   }
 
-  async transcribeAudio(audioUri: string): Promise<{ text: string, items: Array<{ name: string, quantity: number, unit: string }> }> {
+  async transcribeAudio(audioUri: string): Promise<{ text: string, items: TranscribedItem[] }> {
     try {
       console.log('Reading audio file..');
       if (!await FileSystem.getInfoAsync(audioUri).then(info => info.exists)) {
@@ -123,7 +136,7 @@ export class AudioService {
       );
 
       console.log('Received response from function');
-      const response = JSON.parse(execution.responseBody || '{}');
+      const response = JSON.parse(execution.responseBody || '{}') as TranscriptionResponse;
       console.log('Transcription response:', response);
 
       if (!response.success) {
