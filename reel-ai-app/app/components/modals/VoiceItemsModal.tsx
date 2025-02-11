@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
 import { AudioService } from '../../services/audioService';
 import { createInventoryItem } from '../../services/inventoryService';
+import EditItemModal from './EditItemModal';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +24,7 @@ interface TranscribedItem {
   quantity: number;
   unit: string;
   icon?: string;
+  $id?: string;
 }
 
 interface Props {
@@ -35,7 +37,8 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcribedItems, setTranscribedItems] = useState<TranscribedItem[]>([]);
-  const [currentItemIndex, setCurrentItemIndex] = useState(0);
+  const [selectedItem, setSelectedItem] = useState<TranscribedItem | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Use useRef to persist the AudioService instance
   const audioService = React.useRef(new AudioService()).current;
@@ -142,21 +145,46 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
     }
   };
 
+  const handleEditItem = (editedItem: {
+    name: string;
+    quantity: number;
+    unit: string;
+    icon?: string;
+  }) => {
+    setTranscribedItems(prev => 
+      prev.map(item => 
+        item === selectedItem ? {
+          ...editedItem,
+          // Preserve the icon if it wasn't changed in the edit
+          icon: editedItem.icon || item.icon
+        } : item
+      )
+    );
+    setSelectedItem(null);
+    setShowEditModal(false);
+  };
+
+  const handleRemoveItem = (itemToRemove: TranscribedItem) => {
+    setTranscribedItems(prev => prev.filter(item => item !== itemToRemove));
+  };
+
   const handleAddAll = async () => {
     try {
-      for (const item of transcribedItems) {
+      // Create a copy of the items without any temporary fields
+      const cleanItems = transcribedItems.map(({ $id, ...item }) => item);
+      
+      // Add all items to the database
+      for (const item of cleanItems) {
         await createInventoryItem(item);
       }
-      onAddItems(transcribedItems);
+      
+      // Notify parent component with the clean items
+      onAddItems(cleanItems);
       onClose();
     } catch (error) {
       console.error('Error adding items:', error);
       Alert.alert('Error', 'Failed to add items to inventory');
     }
-  };
-
-  const handleRemoveItem = (index: number) => {
-    setTranscribedItems(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -203,7 +231,14 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
             <>
               <ScrollView style={styles.itemsContainer}>
                 {transcribedItems.map((item, index) => (
-                  <View key={index} style={styles.itemCard}>
+                  <TouchableOpacity 
+                    key={index} 
+                    style={styles.itemCard}
+                    onPress={() => {
+                      setSelectedItem(item);
+                      setShowEditModal(true);
+                    }}
+                  >
                     <View style={styles.itemContent}>
                       <Image
                         source={FOOD_ICONS[item.icon as FoodIconType] || FOOD_ICONS.default}
@@ -219,11 +254,11 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
                     </View>
                     <TouchableOpacity
                       style={styles.removeButton}
-                      onPress={() => handleRemoveItem(index)}
+                      onPress={() => handleRemoveItem(item)}
                     >
                       <Ionicons name="trash-outline" size={24} color="#ff4444" />
                     </TouchableOpacity>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
 
@@ -239,6 +274,25 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
           )}
         </View>
       </View>
+
+      {selectedItem && (
+        <EditItemModal
+          visible={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedItem(null);
+          }}
+          onSave={handleEditItem}
+          onDelete={() => handleRemoveItem(selectedItem)}
+          item={{
+            $id: `temp-${Date.now()}`,
+            name: selectedItem.name,
+            quantity: selectedItem.quantity,
+            unit: selectedItem.unit,
+            icon: selectedItem.icon
+          }}
+        />
+      )}
     </Modal>
   );
 }
