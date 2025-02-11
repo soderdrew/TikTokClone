@@ -42,9 +42,12 @@ export const summaryService = {
   generateSummaries: async (videoId: string): Promise<VideoSummary | null> => {
     try {
       console.log('Generating summaries for video:', videoId);
+      const payload = JSON.stringify({ videoId });
+      console.log('Sending payload:', payload);
+      
       const execution = await functions.createExecution(
         'generateSummariesId',
-        JSON.stringify({ videoId })
+        payload
       );
 
       console.log('Function execution response:', execution);

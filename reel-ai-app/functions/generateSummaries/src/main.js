@@ -3,38 +3,48 @@ import OpenAI from 'openai';
 
 // This Appwrite function will be executed every time your function is triggered
 export default async ({ req, res, log, error }) => {
-  if (!req.body || !req.body.videoId) {
-    return res.json({
-      success: false,
-      message: 'Missing required parameter: videoId'
-    }, 400);
-  }
-
-  const { videoId } = JSON.parse(req.body);
-  log(`Processing summaries for video: ${videoId}`);
-
-  // Initialize Appwrite
-  const client = new Client()
-    .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT)
-    .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
-    .setKey(process.env.APPWRITE_API_KEY);
-
-  const databases = new Databases(client);
-
-  // Initialize OpenAI
-  if (!process.env.OPENAI_API_KEY) {
-    error('Missing OPENAI_API_KEY environment variable');
-    return res.json({
-      success: false,
-      message: 'OpenAI API key not configured'
-    }, 500);
-  }
-
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
-
   try {
+    if (!req.body) {
+      return res.json({
+        success: false,
+        message: 'Missing request body'
+      }, 400);
+    }
+
+    const data = JSON.parse(req.body);
+    log('Received request body:', data);
+
+    if (!data.videoId) {
+      return res.json({
+        success: false,
+        message: 'Missing required parameter: videoId'
+      }, 400);
+    }
+
+    const { videoId } = data;
+    log(`Processing summaries for video: ${videoId}`);
+
+    // Initialize Appwrite
+    const client = new Client()
+      .setEndpoint(process.env.APPWRITE_FUNCTION_API_ENDPOINT)
+      .setProject(process.env.APPWRITE_FUNCTION_PROJECT_ID)
+      .setKey(process.env.APPWRITE_API_KEY);
+
+    const databases = new Databases(client);
+
+    // Initialize OpenAI
+    if (!process.env.OPENAI_API_KEY) {
+      error('Missing OPENAI_API_KEY environment variable');
+      return res.json({
+        success: false,
+        message: 'OpenAI API key not configured'
+      }, 500);
+    }
+
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
+
     // Fetch all comments for the video
     log('Fetching comments...');
     const comments = await databases.listDocuments(
