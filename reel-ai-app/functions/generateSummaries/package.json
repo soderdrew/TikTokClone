@@ -1,0 +1,17 @@
+{
+  "name": "generate-summaries",
+  "version": "1.0.0",
+  "description": "AI-powered video content summarization",
+  "main": "src/main.js",
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "node-appwrite": "^9.0.0",
+    "openai": "^4.24.1"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5"
+  }
+}

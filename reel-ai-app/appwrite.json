@@ -806,6 +806,84 @@
                 }
             ],
             "enabled": true
+        },
+        {
+            "$id": "video_summaries",
+            "databaseId": "reel-ai-main",
+            "name": "Video Summaries",
+            "documentSecurity": false,
+            "permissions": [
+                "read(\"any\")",
+                "create(\"any\")",
+                "update(\"any\")",
+                "delete(\"any\")"
+            ],
+            "attributes": [
+                {
+                    "key": "videoId",
+                    "type": "string",
+                    "size": 36,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "commentsSummary",
+                    "type": "string",
+                    "size": 1000,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "reviewsSummary",
+                    "type": "string",
+                    "size": 1000,
+                    "required": true,
+                    "array": false
+                },
+                {
+                    "key": "createdAt",
+                    "type": "datetime",
+                    "required": true,
+                    "array": false
+                }
+            ],
+            "indexes": [
+                {
+                    "key": "videoId_unique",
+                    "type": "unique",
+                    "attributes": [
+                        "videoId"
+                    ],
+                    "orders": [
+                        "ASC"
+                    ]
+                }
+            ],
+            "enabled": true
+        }
+    ],
+    "functions": [
+        {
+            "$id": "generateSummariesId",
+            "name": "generateSummaries",
+            "runtime": "node-18.0",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read",
+                "databases.read",
+                "databases.write"
+            ],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/generateSummaries"
         }
     ]
 }

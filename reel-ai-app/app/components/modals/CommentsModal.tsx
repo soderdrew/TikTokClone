@@ -19,6 +19,7 @@ import { DatabaseService, AuthService } from '../../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { formatDistanceToNow } from 'date-fns';
 import { reviewService, Review } from '../../services/reviewService';
+import { SummaryHeader } from './SummaryModal';
 
 interface Comment extends Models.Document {
   userId: string;
@@ -406,7 +407,7 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
       );
     } else {
       return (
-        <View style={styles.reviewInputContainer}>
+        <View>
           <View style={styles.ratingInput}>
             {[1, 2, 3, 4, 5].map((star) => (
               <TouchableOpacity
@@ -421,30 +422,32 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
               </TouchableOpacity>
             ))}
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="Add a review..."
-            placeholderTextColor="#666"
-            value={newReview.content}
-            onChangeText={(text) => setNewReview(prev => ({ ...prev, content: text }))}
-            multiline
-            maxLength={1000}
-            editable={!isSubmitting}
-          />
-          <TouchableOpacity 
-            style={[
-              styles.postButton,
-              { opacity: newReview.content.trim() && newReview.rating > 0 && !isSubmitting ? 1 : 0.5 }
-            ]}
-            onPress={handleSubmitReview}
-            disabled={!newReview.content.trim() || newReview.rating === 0 || isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator size="small" color="white" />
-            ) : (
-              <Text style={styles.postButtonText}>Post</Text>
-            )}
-          </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Add a review..."
+              placeholderTextColor="#666"
+              value={newReview.content}
+              onChangeText={(text) => setNewReview(prev => ({ ...prev, content: text }))}
+              multiline
+              maxLength={1000}
+              editable={!isSubmitting}
+            />
+            <TouchableOpacity 
+              style={[
+                styles.postButton,
+                { opacity: newReview.content.trim() && newReview.rating > 0 && !isSubmitting ? 1 : 0.5 }
+              ]}
+              onPress={handleSubmitReview}
+              disabled={!newReview.content.trim() || newReview.rating === 0 || isSubmitting}
+            >
+              {isSubmitting ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Text style={styles.postButtonText}>Post</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       );
     }
@@ -454,7 +457,7 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
     <Modal
       visible={visible}
       transparent
-      animationType="none"
+      animationType="slide"
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView 
@@ -502,6 +505,22 @@ export default function CommentsModal({ visible, onClose, videoId }: CommentsMod
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
           </View>
+
+          {activeTab === 'comments' && (
+            <SummaryHeader 
+              type="comments"
+              onRefresh={loadComments}
+              videoId={videoId}
+            />
+          )}
+
+          {activeTab === 'reviews' && (
+            <SummaryHeader 
+              type="reviews"
+              onRefresh={loadReviews}
+              videoId={videoId}
+            />
+          )}
           
           {isLoading ? (
             <View style={styles.loadingContainer}>
@@ -553,8 +572,8 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 20,
   },
   tabs: {
@@ -581,10 +600,11 @@ const styles = StyleSheet.create({
     color: '#ff4444',
   },
   commentsList: {
-    paddingBottom: 20,
+    paddingTop: 10,
   },
   commentContainer: {
     marginBottom: 20,
+    paddingHorizontal: 10,
   },
   commentHeader: {
     flexDirection: 'row',
@@ -598,14 +618,18 @@ const styles = StyleSheet.create({
   },
   timeAgo: {
     color: '#666',
+    fontSize: 12,
   },
   commentText: {
     color: 'white',
     marginVertical: 5,
+    fontSize: 14,
+    lineHeight: 20,
   },
   commentFooter: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 5,
   },
   likeButton: {
     flexDirection: 'row',
@@ -615,6 +639,7 @@ const styles = StyleSheet.create({
   likeCount: {
     color: 'white',
     marginLeft: 5,
+    fontSize: 12,
   },
   deleteButton: {
     padding: 5,
@@ -634,25 +659,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     alignItems: 'center',
   },
-  reviewInputContainer: {
-    flexDirection: 'row',
-    padding: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#333',
-    backgroundColor: '#000',
-    alignItems: 'center',
-  },
   ratingInput: {
-    position: 'absolute',
-    top: -32,
-    left: 0,
-    right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
     backgroundColor: '#000',
+    borderTopWidth: 1,
+    borderTopColor: '#333',
   },
   input: {
     flex: 1,
@@ -670,6 +685,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: '#ff4444',
+    alignSelf: 'flex-end',
   },
   postButtonText: {
     color: 'white',
@@ -682,10 +698,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 20,
+    alignItems: 'center',
   },
   emptyText: {
     color: '#666',

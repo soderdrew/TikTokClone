@@ -809,4 +809,17 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: 'rgba(0, 0, 0, 0.3)',
     },
+    actionButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingVertical: 10,
+    },
+    insightsButton: {
+        backgroundColor: '#FCE4EC',
+    },
+    actionButtonText: {
+        marginLeft: 5,
+        fontSize: 14,
+        color: '#E91E63',
+    },
 }); 
