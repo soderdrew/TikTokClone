@@ -168,6 +168,8 @@ export default function PantryScreen() {
     try {
       // Process each item sequentially
       for (const item of items) {
+        // Use the same handleAddItem function to ensure consistent behavior
+        // but don't create the item in the database yet
         const existingItemIndex = findMatchingItem(item);
 
         if (existingItemIndex !== -1) {
@@ -193,9 +195,16 @@ export default function PantryScreen() {
                   {
                     text: "Keep Separate",
                     style: "cancel",
-                    onPress: () => {
-                      setKitchenItems(prev => [...prev, item]);
-                      resolve(null);
+                    onPress: async () => {
+                      try {
+                        const newItemDoc = await createInventoryItem(item);
+                        setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
+                        resolve(null);
+                      } catch (error) {
+                        console.error('Error creating separate item:', error);
+                        Alert.alert('Error', 'Failed to add item. Please try again.');
+                        resolve(null);
+                      }
                     }
                   },
                   {
@@ -219,21 +228,52 @@ export default function PantryScreen() {
               );
             });
           } else {
-            // Same units, combine directly
-            const updatedItem = {
-              ...existingItem,
-              quantity: existingItem.quantity + item.quantity
-            };
-            await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
-            setKitchenItems(prev => 
-              prev.map((prevItem, index) => 
-                index === existingItemIndex ? updatedItem : prevItem
-              )
-            );
+            // Same units, ask to combine
+            await new Promise((resolve) => {
+              Alert.alert(
+                "Combine Items",
+                `There's already ${existingItem.name} with ${formatQuantity(existingItem.quantity)} ${existingItem.unit}. Would you like to combine with your new quantity of ${formatQuantity(item.quantity)} ${item.unit}?`,
+                [
+                  {
+                    text: "Keep Separate",
+                    style: "cancel",
+                    onPress: async () => {
+                      try {
+                        const newItemDoc = await createInventoryItem(item);
+                        setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
+                        resolve(null);
+                      } catch (error) {
+                        console.error('Error creating separate item:', error);
+                        Alert.alert('Error', 'Failed to add item. Please try again.');
+                        resolve(null);
+                      }
+                    }
+                  },
+                  {
+                    text: "Combine",
+                    style: "default",
+                    onPress: async () => {
+                      const updatedItem = {
+                        ...existingItem,
+                        quantity: existingItem.quantity + item.quantity
+                      };
+                      await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
+                      setKitchenItems(prev => 
+                        prev.map((prevItem, index) => 
+                          index === existingItemIndex ? updatedItem : prevItem
+                        )
+                      );
+                      resolve(null);
+                    }
+                  }
+                ]
+              );
+            });
           }
         } else {
-          // Add as new item
-          setKitchenItems(prev => [...prev, item]);
+          // No existing item, create new one
+          const newItemDoc = await createInventoryItem(item);
+          setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
         }
       }
     } catch (error) {

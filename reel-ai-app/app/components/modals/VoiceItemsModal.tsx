@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
 import { AudioService } from '../../services/audioService';
-import { createInventoryItem } from '../../services/inventoryService';
+import { createInventoryItem, getInventoryItems, combineInventoryItemsWithAI } from '../../services/inventoryService';
 import EditItemModal from './EditItemModal';
 
 const { width } = Dimensions.get('window');
@@ -46,6 +46,62 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }
   // Use useRef to persist the AudioService instance
   const audioService = React.useRef(new AudioService()).current;
 
+  // Reset all states when modal is closed
+  const handleClose = async () => {
+    if (isRecording) {
+      try {
+        await audioService.stopRecording();
+      } catch (error) {
+        console.error('Error stopping recording during close:', error);
+      }
+    }
+    setIsRecording(false);
+    setIsTranscribing(false);
+    setIsSaving(false);
+    setDeletingItems(new Set());
+    setTranscribedItems([]);
+    setSelectedItem(null);
+    setShowEditModal(false);
+    onClose();
+  };
+
+  // Reset states when modal becomes invisible
+  useEffect(() => {
+    if (!visible) {
+      if (isRecording) {
+        audioService.stopRecording().catch(error => {
+          console.error('Error stopping recording on visibility change:', error);
+        });
+      }
+      setIsRecording(false);
+      setIsTranscribing(false);
+      setIsSaving(false);
+      setDeletingItems(new Set());
+      setTranscribedItems([]);
+      setSelectedItem(null);
+      setShowEditModal(false);
+    }
+  }, [visible]);
+
+  // Add cleanup effect
+  useEffect(() => {
+    let mounted = true;
+    return () => {
+      mounted = false;
+      if (isRecording) {
+        audioService.stopRecording().catch(console.error);
+      }
+      // Clear all states on unmount
+      setIsRecording(false);
+      setIsTranscribing(false);
+      setIsSaving(false);
+      setDeletingItems(new Set());
+      setTranscribedItems([]);
+      setSelectedItem(null);
+      setShowEditModal(false);
+    };
+  }, []);
+
   const startRecording = async () => {
     try {
       if (isRecording) {
@@ -63,17 +119,6 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }
       setIsRecording(false);
     }
   };
-
-  // Add cleanup effect
-  React.useEffect(() => {
-    let mounted = true;
-    return () => {
-      mounted = false;
-      if (isRecording) {
-        audioService.stopRecording().catch(console.error);
-      }
-    };
-  }, []);
 
   const stopRecording = async () => {
     let audioUri: string | null = null;
@@ -199,27 +244,23 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }
         // Make icon mapping case-insensitive
         icon: item.icon || getFoodIcon(item.name.toLowerCase())
       }));
+
+      // Get current inventory items
+      const existingItems = await getInventoryItems();
       
-      // Array to store items with their database IDs
-      const savedItems: TranscribedItem[] = [];
-      
-      // Add all items to the database and collect their IDs
-      for (const item of cleanItems) {
-        const savedDoc = await createInventoryItem(item);
-        // Convert the Appwrite document back to our TranscribedItem type
-        const savedItem: TranscribedItem = {
-          $id: savedDoc.$id,
-          name: savedDoc.name,
-          quantity: savedDoc.quantity,
-          unit: savedDoc.unit,
-          // Make icon mapping case-insensitive
-          icon: savedDoc.icon || getFoodIcon(savedDoc.name.toLowerCase()) // Fallback to icon mapping if needed
-        };
-        savedItems.push(savedItem);
+      // Use the AI-powered combination logic
+      const { itemsToAdd, itemsToUpdate } = await combineInventoryItemsWithAI(existingItems, cleanItems);
+
+      // Process updates first
+      for (const item of itemsToUpdate) {
+        await onAddItems([item]);
+      }
+
+      // Then process new items
+      for (const item of itemsToAdd) {
+        await onAddItems([item]);
       }
       
-      // Notify parent component with the items that include database IDs
-      onAddItems(savedItems);
       onClose();
     } catch (error) {
       console.error('Error adding items:', error);
@@ -234,7 +275,7 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }
       visible={visible}
       transparent
       animationType="slide"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
       <View style={styles.modalContainer}>
         <View style={styles.content}>
@@ -245,7 +286,7 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }
               </TouchableOpacity>
               <Text style={styles.title}>Add Items by Voice</Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
           </View>
