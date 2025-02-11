@@ -10,10 +10,11 @@ import {
   Platform,
   Image,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
-import { updateInventoryItem } from '../../services/inventoryService';
+import { updateInventoryItem, createInventoryItem } from '../../services/inventoryService';
 
 // Common units for food items
 const UNITS = {
@@ -41,11 +42,12 @@ interface Props {
     unit: string;
     icon?: string;
   };
+  skipDatabaseUpdate?: boolean;
 }
 
-export default function EditItemModal({ visible, onClose, onSave, onDelete, item }: Props) {
+export default function EditItemModal({ visible, onClose, onSave, onDelete, item, skipDatabaseUpdate = false }: Props) {
   const [name, setName] = useState(item.name);
-  const [quantity, setQuantity] = useState(item.quantity.toString());
+  const [quantity, setQuantity] = useState(Number(item.quantity.toFixed(2)).toString());
   const [unit, setUnit] = useState(item.unit);
   const [showIconSelector, setShowIconSelector] = useState(false);
   const [showUnitSelector, setShowUnitSelector] = useState(false);
@@ -58,7 +60,7 @@ export default function EditItemModal({ visible, onClose, onSave, onDelete, item
   useEffect(() => {
     if (visible) {
       setName(item.name);
-      setQuantity(item.quantity.toString());
+      setQuantity(Number(item.quantity.toFixed(2)).toString());
       setUnit(item.unit);
       setSelectedIcon(item.icon as FoodIconType || null);
       setCustomUnit('');
@@ -72,28 +74,69 @@ export default function EditItemModal({ visible, onClose, onSave, onDelete, item
   const handleSave = async () => {
     if (!name || !quantity || !unit) return;
 
+    const quantityNum = parseFloat(quantity);
+    
+    if (quantityNum === 0) {
+      Alert.alert(
+        "Zero Quantity",
+        "Would you like to delete this item instead?",
+        [
+          {
+            text: "Keep",
+            style: "cancel",
+            onPress: () => saveItem(quantityNum)
+          },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => {
+              onDelete(item.$id);
+              onClose();
+            }
+          }
+        ]
+      );
+    } else {
+      saveItem(quantityNum);
+    }
+  };
+
+  const saveItem = async (quantityNum: number) => {
     const updatedItem = {
       $id: item.$id,
       name,
-      quantity: parseInt(quantity),
+      quantity: quantityNum,
       unit,
-      icon: selectedIcon || autoMatchedIcon || undefined,
+      icon: (selectedIcon || autoMatchedIcon) ? 
+        (selectedIcon || getFoodIcon(name.toLowerCase())) : 
+        undefined,
     };
 
     try {
       console.log('Saving item:', updatedItem);
-      console.log('Updating item with ID:', item.$id);
-      await updateInventoryItem(item.$id, updatedItem);
-      onSave(updatedItem);
+      
+      // If no $id exists, create a new item
+      if (!item.$id) {
+        console.log('Creating new item as $id is undefined');
+        const newItemDoc = await createInventoryItem(updatedItem);
+        const newItem = { ...updatedItem, $id: newItemDoc.$id };
+        onSave(newItem);
+      } else {
+        // Update existing item
+        await updateInventoryItem(item.$id, updatedItem);
+        onSave(updatedItem);
+      }
+      
       onClose();
     } catch (error) {
-      console.error('Error updating item:', error);
+      console.error('Error saving item:', error);
+      Alert.alert('Error', 'Failed to save item. Please try again.');
     }
   };
 
   const handleQuantityChange = (change: number) => {
-    const currentQty = parseInt(quantity) || 0;
-    const newQty = Math.max(0, currentQty + change);
+    const currentQty = parseFloat(quantity) || 0;
+    const newQty = Math.max(0, Number((currentQty + change).toFixed(2)));
     setQuantity(newQty.toString());
   };
 
@@ -255,6 +298,12 @@ export default function EditItemModal({ visible, onClose, onSave, onDelete, item
                       style={[styles.input, styles.quantityInput]}
                       value={quantity}
                       onChangeText={setQuantity}
+                      onEndEditing={() => {
+                        const numValue = parseFloat(quantity);
+                        if (!isNaN(numValue)) {
+                          setQuantity(numValue.toFixed(2));
+                        }
+                      }}
                       keyboardType="numeric"
                       placeholder="0"
                       placeholderTextColor="#666"

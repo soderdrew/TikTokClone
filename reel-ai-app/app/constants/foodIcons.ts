@@ -76,11 +76,11 @@ export const FOOD_ICONS = {
 export type FoodIconType = keyof typeof FOOD_ICONS;
 
 // Helper function to get icon for an item
-export function getFoodIcon(itemName: string): any {
+export function getFoodIcon(itemName: string): FoodIconType {
   const normalizedName = itemName.toLowerCase().trim();
   const iconKey = Object.keys(FOOD_ICONS).find(key => 
     normalizedName.includes(key)
   ) as FoodIconType;
   
-  return FOOD_ICONS[iconKey] || FOOD_ICONS.default;
+  return iconKey || 'default';
 } 

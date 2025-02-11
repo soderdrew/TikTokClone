@@ -31,11 +31,14 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onAddItems: (items: TranscribedItem[]) => void;
+  onBack: () => void;
 }
 
-export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props) {
+export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }: Props) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingItems, setDeletingItems] = useState<Set<string>>(new Set());
   const [transcribedItems, setTranscribedItems] = useState<TranscribedItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<TranscribedItem | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -92,7 +95,8 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
           if (items && items.length > 0) {
             const newItems = items.map(item => ({
               ...item,
-              icon: getFoodIcon(item.name),
+              // Make icon mapping case-insensitive
+              icon: getFoodIcon(item.name.toLowerCase()),
             }));
             setTranscribedItems(prev => [...prev, ...newItems]);
           } else if (text && text.trim()) {
@@ -101,7 +105,8 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
               name: text.trim(),
               quantity: 1,
               unit: 'pcs',
-              icon: getFoodIcon(text.trim()),
+              // Make icon mapping case-insensitive
+              icon: getFoodIcon(text.trim().toLowerCase()),
             };
             setTranscribedItems(prev => [...prev, newItem]);
           } else {
@@ -164,26 +169,63 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
     setShowEditModal(false);
   };
 
-  const handleRemoveItem = (itemToRemove: TranscribedItem) => {
-    setTranscribedItems(prev => prev.filter(item => item !== itemToRemove));
+  const handleRemoveItem = async (itemToRemove: TranscribedItem) => {
+    // Create a unique identifier for the item
+    const itemKey = itemToRemove.$id || `temp-${Date.now()}`;
+    try {
+      setDeletingItems(prev => new Set(prev).add(itemKey));
+      // Add a small delay to show loading state
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setTranscribedItems(prev => prev.filter(item => item !== itemToRemove));
+    } catch (error) {
+      console.error('Error removing item:', error);
+      Alert.alert('Error', 'Failed to remove item');
+    } finally {
+      setDeletingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemKey);
+        return newSet;
+      });
+    }
   };
 
   const handleAddAll = async () => {
     try {
-      // Create a copy of the items without any temporary fields
-      const cleanItems = transcribedItems.map(({ $id, ...item }) => item);
+      setIsSaving(true);
+      // Create a copy of the items without any temporary fields, but preserve icon names
+      const cleanItems = transcribedItems.map(({ $id, ...item }) => ({
+        ...item,
+        // Ensure we're using the icon name (FoodIconType) rather than the icon object
+        // Make icon mapping case-insensitive
+        icon: item.icon || getFoodIcon(item.name.toLowerCase())
+      }));
       
-      // Add all items to the database
+      // Array to store items with their database IDs
+      const savedItems: TranscribedItem[] = [];
+      
+      // Add all items to the database and collect their IDs
       for (const item of cleanItems) {
-        await createInventoryItem(item);
+        const savedDoc = await createInventoryItem(item);
+        // Convert the Appwrite document back to our TranscribedItem type
+        const savedItem: TranscribedItem = {
+          $id: savedDoc.$id,
+          name: savedDoc.name,
+          quantity: savedDoc.quantity,
+          unit: savedDoc.unit,
+          // Make icon mapping case-insensitive
+          icon: savedDoc.icon || getFoodIcon(savedDoc.name.toLowerCase()) // Fallback to icon mapping if needed
+        };
+        savedItems.push(savedItem);
       }
       
-      // Notify parent component with the clean items
-      onAddItems(cleanItems);
+      // Notify parent component with the items that include database IDs
+      onAddItems(savedItems);
       onClose();
     } catch (error) {
       console.error('Error adding items:', error);
       Alert.alert('Error', 'Failed to add items to inventory');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -197,7 +239,12 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
       <View style={styles.modalContainer}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Add Items by Voice</Text>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.title}>Add Items by Voice</Text>
+            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
@@ -253,22 +300,43 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
                       </View>
                     </View>
                     <TouchableOpacity
-                      style={styles.removeButton}
+                      style={[
+                        styles.removeButton,
+                        deletingItems.has(item.$id || `temp-${Date.now()}`) && styles.removeButtonDisabled
+                      ]}
                       onPress={() => handleRemoveItem(item)}
+                      disabled={deletingItems.has(item.$id || `temp-${Date.now()}`)}
                     >
-                      <Ionicons name="trash-outline" size={24} color="#ff4444" />
+                      {deletingItems.has(item.$id || `temp-${Date.now()}`) ? (
+                        <ActivityIndicator size="small" color="#ff4444" />
+                      ) : (
+                        <Ionicons name="trash-outline" size={24} color="#ff4444" />
+                      )}
                     </TouchableOpacity>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
 
               <TouchableOpacity
-                style={styles.addAllButton}
+                style={[
+                  styles.addAllButton,
+                  isSaving && styles.addAllButtonDisabled
+                ]}
                 onPress={handleAddAll}
+                disabled={isSaving}
               >
-                <Text style={styles.addAllButtonText}>
-                  Add All Items ({transcribedItems.length})
-                </Text>
+                {isSaving ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator color="white" size="small" />
+                    <Text style={styles.addAllButtonText}>
+                      Saving Items...
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.addAllButtonText}>
+                    Add All Items ({transcribedItems.length})
+                  </Text>
+                )}
               </TouchableOpacity>
             </>
           )}
@@ -291,6 +359,7 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems }: Props)
             unit: selectedItem.unit,
             icon: selectedItem.icon
           }}
+          skipDatabaseUpdate={true}
         />
       )}
     </Modal>
@@ -319,6 +388,11 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   title: {
     fontSize: 24,
@@ -393,6 +467,13 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: 8,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeButtonDisabled: {
+    opacity: 0.5,
   },
   addAllButton: {
     backgroundColor: '#4a9eff',
@@ -403,9 +484,21 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#2d7cd1',
   },
+  addAllButtonDisabled: {
+    backgroundColor: '#333',
+    borderColor: '#444',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   addAllButtonText: {
     color: 'white',
     fontSize: 16,
     fontFamily: 'SpaceMono',
+  },
+  backButton: {
+    padding: 8,
   },
 }); 

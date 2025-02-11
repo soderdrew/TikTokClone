@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
-import { createInventoryItem } from '../../services/inventoryService';
+import { createInventoryItem, getInventoryItems, updateInventoryItem } from '../../services/inventoryService';
 import { AudioService } from '../../services/audioService';
 
 // Common units for food items
@@ -30,14 +30,31 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onAdd: (item: {
+    $id?: string;
     name: string;
     quantity: number;
     unit: string;
     icon?: string;
-  }) => void;
+  }, isUpdate?: boolean) => void;
+  onBack: () => void;
 }
 
-export default function AddItemModal({ visible, onClose, onAdd }: Props) {
+// Add type definition for inventory items
+interface InventoryItem {
+  $id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  icon?: string;
+}
+
+// Helper function to clean item for update
+const cleanItemForUpdate = (item: InventoryItem) => {
+  const { name, quantity, unit, icon } = item;
+  return { name, quantity, unit, icon };
+};
+
+export default function AddItemModal({ visible, onClose, onAdd, onBack }: Props) {
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('');
@@ -48,6 +65,7 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
   const [showCustomUnitInput, setShowCustomUnitInput] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   // Use useRef to persist the AudioService instance
   const audioService = React.useRef(new AudioService()).current;
@@ -61,6 +79,7 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
       setCustomUnit('');
       setShowCustomUnitInput(false);
       setAutoMatchedIcon(null);
+      setHasAttemptedSubmit(false);
     }
   }, [visible]);
 
@@ -72,27 +91,94 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
   }, [name]);
 
   const handleAdd = async () => {
+    setHasAttemptedSubmit(true);
     if (!name || !quantity || !unit) return;
 
     const item = {
       name,
-      quantity: parseInt(quantity),
+      quantity: parseFloat(quantity),
       unit,
-      icon: selectedIcon || undefined,
+      icon: (selectedIcon || autoMatchedIcon) ? 
+        (selectedIcon || getFoodIcon(name.toLowerCase())) : 
+        undefined,
     };
 
     try {
-      await createInventoryItem(item);
-      onAdd(item);
-      onClose();
+      // Get all inventory items to check for duplicates
+      const allItems = await getInventoryItems();
+      
+      // Find existing item with same name and convertible units
+      const existingItem = allItems.find(existing => 
+        existing.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+      ) as InventoryItem | undefined;
+
+      if (existingItem) {
+        // Create a message for the alert
+        const message = existingItem.unit.toLowerCase() !== item.unit.toLowerCase()
+          ? `There's already ${existingItem.name} with ${existingItem.quantity} ${existingItem.unit}. Would you like to keep this as a separate entry or combine them?`
+          : `There's already ${existingItem.name} with ${existingItem.quantity} ${existingItem.unit}. Would you like to combine with your new quantity of ${item.quantity} ${item.unit}?`;
+
+        // Show alert and wait for user choice
+        new Promise((resolve) => {
+          Alert.alert(
+            existingItem.unit.toLowerCase() !== item.unit.toLowerCase() ? "Different Units" : "Combine Items",
+            message,
+            [
+              {
+                text: "Keep Separate",
+                style: "cancel",
+                onPress: async () => {
+                  try {
+                    const newItemDoc = await createInventoryItem(item);
+                    onAdd({ ...item, $id: newItemDoc.$id });
+                    onClose();
+                    resolve(null);
+                  } catch (error) {
+                    console.error('Error creating separate item:', error);
+                    Alert.alert('Error', 'Failed to add item. Please try again.');
+                    resolve(null);
+                  }
+                }
+              },
+              {
+                text: "Combine",
+                style: "default",
+                onPress: async () => {
+                  try {
+                    const updatedItem: InventoryItem = {
+                      ...existingItem,
+                      quantity: existingItem.quantity + item.quantity
+                    };
+                    await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
+                    // Call onAdd with isUpdate=true to refresh the UI
+                    onAdd(updatedItem, true);
+                    onClose();
+                    resolve(null);
+                  } catch (error) {
+                    console.error('Error updating combined item:', error);
+                    Alert.alert('Error', 'Failed to combine items. Please try again.');
+                    resolve(null);
+                  }
+                }
+              }
+            ]
+          );
+        });
+      } else {
+        // No existing item found, create new one
+        const newItemDoc = await createInventoryItem(item);
+        onAdd({ ...item, $id: newItemDoc.$id });
+        onClose();
+      }
     } catch (error) {
       console.error('Error adding item:', error);
+      Alert.alert('Error', 'Failed to add item. Please try again.');
     }
   };
 
   const handleQuantityChange = (change: number) => {
-    const currentQty = parseInt(quantity) || 0;
-    const newQty = Math.max(0, currentQty + change);
+    const currentQty = parseFloat(quantity) || 0;
+    const newQty = Math.max(0, Number((currentQty + change).toFixed(1)));
     setQuantity(newQty.toString());
   };
 
@@ -238,13 +324,17 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                   key={unitOption}
                   style={[
                     styles.unitOption,
-                    unit === unitOption && styles.selectedUnitOption
+                    unit === unitOption && !showCustomUnitInput && styles.selectedUnitOption
                   ]}
-                  onPress={() => setUnit(unitOption)}
+                  onPress={() => {
+                    setUnit(unitOption);
+                    setCustomUnit('');
+                    setShowCustomUnitInput(false);
+                  }}
                 >
                   <Text style={[
                     styles.unitOptionText,
-                    unit === unitOption && styles.selectedUnitOptionText
+                    unit === unitOption && !showCustomUnitInput && styles.selectedUnitOptionText
                   ]}>
                     {unitOption}
                   </Text>
@@ -260,7 +350,13 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
               styles.customUnitButton,
               showCustomUnitInput && styles.selectedUnitOption
             ]}
-            onPress={() => setShowCustomUnitInput(!showCustomUnitInput)}
+            onPress={() => {
+              setShowCustomUnitInput(!showCustomUnitInput);
+              setUnit(''); // Clear any selected predefined unit
+              if (!showCustomUnitInput) {
+                setCustomUnit('');
+              }
+            }}
           >
             <Text style={[
               styles.unitOptionText,
@@ -299,7 +395,12 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
       <View style={styles.modalContainer}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Add New Item</Text>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                <Ionicons name="arrow-back" size={24} color="white" />
+              </TouchableOpacity>
+              <Text style={styles.title}>Add New Item</Text>
+            </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
@@ -316,34 +417,22 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
               <View style={styles.form}>
                 {/* Name Input */}
                 <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Item Name</Text>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.label}>Item Name</Text>
+                    <Text style={styles.requiredAsterisk}>*</Text>
+                  </View>
                   <View style={styles.nameInputContainer}>
                     <TextInput
-                      style={[styles.input, styles.nameInput]}
+                      style={[
+                        styles.input, 
+                        styles.nameInput,
+                        hasAttemptedSubmit && !name && styles.inputError
+                      ]}
                       value={name}
                       onChangeText={setName}
                       placeholder="Enter item name"
                       placeholderTextColor="#666"
-                      editable={!isRecording && !isTranscribing}
                     />
-                    <TouchableOpacity
-                      onPress={handleRecordPress}
-                      style={[
-                        styles.micButton,
-                        isRecording && styles.micButtonRecording
-                      ]}
-                      disabled={isTranscribing}
-                    >
-                      {isTranscribing ? (
-                        <ActivityIndicator color="white" size="small" />
-                      ) : (
-                        <Ionicons
-                          name={isRecording ? "radio" : "mic"}
-                          size={24}
-                          color="white"
-                        />
-                      )}
-                    </TouchableOpacity>
                     <Image
                       source={selectedIcon ? FOOD_ICONS[selectedIcon] : (autoMatchedIcon || FOOD_ICONS.default)}
                       style={styles.autoIcon}
@@ -351,11 +440,15 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                       fadeDuration={0}
                     />
                   </View>
+                  {hasAttemptedSubmit && !name && <Text style={styles.validationText}>Name is required</Text>}
                 </View>
 
                 {/* Quantity Controls */}
                 <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Quantity</Text>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.label}>Quantity</Text>
+                    <Text style={styles.requiredAsterisk}>*</Text>
+                  </View>
                   <View style={styles.quantityContainer}>
                     <TouchableOpacity 
                       style={styles.quantityButton}
@@ -365,7 +458,11 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                     </TouchableOpacity>
                     
                     <TextInput
-                      style={[styles.input, styles.quantityInput]}
+                      style={[
+                        styles.input, 
+                        styles.quantityInput,
+                        hasAttemptedSubmit && !quantity && styles.inputError
+                      ]}
                       value={quantity}
                       onChangeText={setQuantity}
                       keyboardType="numeric"
@@ -380,12 +477,17 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                       <Ionicons name="add" size={24} color="white" />
                     </TouchableOpacity>
                   </View>
+                  {hasAttemptedSubmit && !quantity && <Text style={styles.validationText}>Quantity is required</Text>}
                 </View>
 
                 {/* Unit Selector */}
                 <View style={styles.inputContainer}>
-                  <Text style={styles.label}>Unit</Text>
+                  <View style={styles.labelContainer}>
+                    <Text style={styles.label}>Unit</Text>
+                    <Text style={styles.requiredAsterisk}>*</Text>
+                  </View>
                   {renderUnitSelector()}
+                  {hasAttemptedSubmit && !unit && <Text style={styles.validationText}>Unit is required</Text>}
                 </View>
 
                 {/* Icon Selector */}
@@ -456,6 +558,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   title: {
     fontSize: 24,
     color: 'white',
@@ -506,6 +613,24 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 14,
     fontFamily: 'SpaceMono',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  labelContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  requiredAsterisk: {
+    color: '#ff4444',
+    fontSize: 14,
+    fontFamily: 'SpaceMono',
+  },
+  validationText: {
+    color: '#ff4444',
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    marginTop: 4,
   },
   input: {
     backgroundColor: '#333',
@@ -515,6 +640,9 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono',
     borderWidth: 2,
     borderColor: '#444',
+  },
+  inputError: {
+    borderColor: '#ff4444',
   },
   iconSelectorButton: {
     flexDirection: 'row',
@@ -654,19 +782,7 @@ const styles = StyleSheet.create({
   customUnitInput: {
     width: '100%',
   },
-  micButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#4a9eff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 8,
-    borderWidth: 2,
-    borderColor: '#2d7cd1',
-  },
-  micButtonRecording: {
-    backgroundColor: '#ff4444',
-    borderColor: '#cc3333',
+  backButton: {
+    padding: 8,
   },
 }); 

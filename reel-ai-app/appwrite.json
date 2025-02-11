@@ -683,7 +683,7 @@
                 },
                 {
                     "key": "quantity",
-                    "type": "integer",
+                    "type": "double",
                     "required": true,
                     "min": 0,
                     "array": false

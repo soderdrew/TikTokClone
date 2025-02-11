@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, Image } from 'react-native';
-import { getFoodIcon } from '../../constants/foodIcons';
+import { getFoodIcon, FOOD_ICONS, FoodIconType } from '../../constants/foodIcons';
+// import { formatQuantity } from '../../(tabs)/pantry';
 
 const { width } = Dimensions.get('window');
 const GRID_SPACING = 16;
@@ -20,6 +21,14 @@ interface Props {
   onItemPress: (item: InventoryItem) => void;
 }
 
+const formatQuantity = (quantity: number): string => {
+  // Always round to 2 decimal places, then remove unnecessary trailing zeros
+  const roundedQuantity = Number(quantity.toFixed(2));
+  return roundedQuantity % 1 === 0 
+    ? roundedQuantity.toFixed(0) 
+    : roundedQuantity.toString().replace(/\.?0+$/, '');
+};
+
 export default function InventoryGrid({ items, onItemPress }: Props) {
   const renderItem = ({ item }: { item: InventoryItem }) => (
     <TouchableOpacity 
@@ -29,7 +38,7 @@ export default function InventoryGrid({ items, onItemPress }: Props) {
       <View style={styles.pixelBox}>
         <View style={styles.contentContainer}>
           <Image 
-            source={getFoodIcon(item.icon || item.name)}
+            source={FOOD_ICONS[item.icon as FoodIconType] || getFoodIcon(item.name.toLowerCase())}
             style={styles.itemIcon}
             resizeMode="contain"
             fadeDuration={0}
@@ -46,7 +55,7 @@ export default function InventoryGrid({ items, onItemPress }: Props) {
             numberOfLines={1}
             ellipsizeMode="tail"
           >
-            {item.quantity} {item.unit}
+            {formatQuantity(item.quantity)} {item.unit}
           </Text>
         </View>
       </View>

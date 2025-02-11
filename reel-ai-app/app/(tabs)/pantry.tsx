@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import InventoryGrid from '../components/inventory/InventoryGrid';
 import AddItemModal from '../components/modals/AddItemModal';
 import EditItemModal from '../components/modals/EditItemModal';
 import VoiceItemsModal from '../components/modals/VoiceItemsModal';
-import { getInventoryItems, deleteInventoryItem } from '../services/inventoryService';
+import { getInventoryItems, deleteInventoryItem, updateInventoryItem, createInventoryItem } from '../services/inventoryService';
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +22,110 @@ const mockKitchenItems = [
   { id: '8', name: 'Bread', quantity: 2, unit: 'loaves' },
   { id: '9', name: 'Tomato Sauce Chef Boyardeez Nuts', quantity: 3, unit: 'cans' },
 ];
+
+// Unit conversion groups
+type UnitGroup = 'VOLUME' | 'WEIGHT' | 'COUNT';
+type UnitMap = Record<UnitGroup, string[]>;
+
+// Define types for unit conversions
+interface ConversionMap {
+  [key: string]: number;
+}
+
+interface UnitConversions {
+  VOLUME: ConversionMap;
+  WEIGHT: ConversionMap;
+}
+
+const CONVERTIBLE_UNITS: UnitMap = {
+  VOLUME: ['ml', 'L', 'cups', 'tbsp', 'tsp', 'gal', 'gallons', 'gallon'],
+  WEIGHT: ['g', 'kg', 'oz', 'lbs', 'pound', 'pounds'],
+  COUNT: ['pcs', 'pack', 'box', 'can', 'bottle', 'piece', 'pieces'],
+};
+
+// Unit conversion ratios (to base unit)
+const UNIT_CONVERSIONS: UnitConversions = {
+  VOLUME: {
+    // Convert everything to milliliters (mL) as base unit
+    'ml': 1,
+    'l': 1000,
+    'cups': 236.588,
+    'tbsp': 14.787,
+    'tsp': 4.929,
+    'gal': 3785.41,
+    'gallons': 3785.41,
+    'gallon': 3785.41
+  },
+  WEIGHT: {
+    // Convert everything to grams (g) as base unit
+    'g': 1,
+    'kg': 1000,
+    'oz': 28.3495,
+    'lbs': 453.592,
+    'pound': 453.592,
+    'pounds': 453.592
+  }
+};
+
+// Helper function to check if units are in the same conversion group
+const areUnitsConvertible = (unit1: string, unit2: string): boolean => {
+  const normalizedUnit1 = unit1.toLowerCase();
+  const normalizedUnit2 = unit2.toLowerCase();
+  
+  // Check if units are exactly the same
+  if (normalizedUnit1 === normalizedUnit2) return true;
+  
+  // Check if units are in the same conversion group
+  return Object.values(CONVERTIBLE_UNITS).some(group => 
+    group.includes(normalizedUnit1) && group.includes(normalizedUnit2)
+  );
+};
+
+// Helper function to clean item data for database updates
+const cleanItemForUpdate = (item: any) => {
+  const { $id, $createdAt, $updatedAt, $permissions, $collectionId, $databaseId, ...cleanItem } = item;
+  return cleanItem;
+};
+
+// Helper function to convert quantity between units
+const convertQuantity = (quantity: number, fromUnit: string, toUnit: string): number => {
+  // Normalize units to lowercase
+  const from = fromUnit.toLowerCase();
+  const to = toUnit.toLowerCase();
+  
+  // If units are the same, no conversion needed
+  if (from === to) return quantity;
+  
+  // Find which group these units belong to
+  let conversionGroup: keyof UnitConversions | null = null;
+  for (const [group, units] of Object.entries(CONVERTIBLE_UNITS)) {
+    if (units.includes(from) && units.includes(to)) {
+      if (group === 'VOLUME' || group === 'WEIGHT') {
+        conversionGroup = group;
+      }
+      break;
+    }
+  }
+  
+  // If no conversion group found or units are COUNT type, return original quantity
+  if (!conversionGroup) return quantity;
+  
+  const conversions = UNIT_CONVERSIONS[conversionGroup];
+  if (!(from in conversions) || !(to in conversions)) return quantity;
+  
+  // Convert to base unit, then to target unit
+  const baseValue = quantity * conversions[from];
+  return baseValue / conversions[to];
+};
+
+// Helper function to format quantity for display
+const formatQuantity = (quantity: number): string => {
+  // Always round to 2 decimal places, then remove unnecessary trailing zeros
+  const roundedQuantity = Number(quantity.toFixed(2));
+  return roundedQuantity % 1 === 0 
+    ? roundedQuantity.toFixed(0) 
+    : roundedQuantity.toString().replace(/\.?0+$/, '');
+};
 
 export default function PantryScreen() {
   const router = useRouter();
@@ -52,8 +156,175 @@ export default function PantryScreen() {
     setShowEditModal(true);
   };
 
-  const handleAddItem = (item: any) => {
-    setKitchenItems((prevItems) => [...prevItems, item]);
+  const findMatchingItem = (newItem: any) => {
+    return kitchenItems.findIndex(existing => 
+      // Normalize names by converting to lowercase and trimming
+      existing.name.toLowerCase().trim() === newItem.name.toLowerCase().trim() &&
+      areUnitsConvertible(existing.unit, newItem.unit)
+    );
+  };
+
+  const handleAddItems = async (items: any[]) => {
+    try {
+      // Process each item sequentially
+      for (const item of items) {
+        const existingItemIndex = findMatchingItem(item);
+
+        if (existingItemIndex !== -1) {
+          const existingItem = kitchenItems[existingItemIndex];
+          
+          // If units are different, ask user to confirm combination
+          if (existingItem.unit.toLowerCase() !== item.unit.toLowerCase()) {
+            // Calculate converted quantity for display
+            const convertedQuantity = convertQuantity(
+              item.quantity,
+              item.unit,
+              existingItem.unit
+            );
+            
+            // Show alert and wait for user response
+            await new Promise((resolve) => {
+              Alert.alert(
+                "Different Units",
+                `There's already ${existingItem.name} with ${formatQuantity(existingItem.quantity)} ${existingItem.unit}. ` +
+                `Adding ${formatQuantity(item.quantity)} ${item.unit} (≈ ${formatQuantity(convertedQuantity)} ${existingItem.unit}). ` +
+                `Would you like to keep this as a separate entry?`,
+                [
+                  {
+                    text: "Keep Separate",
+                    style: "cancel",
+                    onPress: () => {
+                      setKitchenItems(prev => [...prev, item]);
+                      resolve(null);
+                    }
+                  },
+                  {
+                    text: "Convert & Combine",
+                    style: "default",
+                    onPress: async () => {
+                      const updatedItem = {
+                        ...existingItem,
+                        quantity: existingItem.quantity + convertedQuantity
+                      };
+                      await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
+                      setKitchenItems(prev => 
+                        prev.map((prevItem, index) => 
+                          index === existingItemIndex ? updatedItem : prevItem
+                        )
+                      );
+                      resolve(null);
+                    }
+                  }
+                ]
+              );
+            });
+          } else {
+            // Same units, combine directly
+            const updatedItem = {
+              ...existingItem,
+              quantity: existingItem.quantity + item.quantity
+            };
+            await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
+            setKitchenItems(prev => 
+              prev.map((prevItem, index) => 
+                index === existingItemIndex ? updatedItem : prevItem
+              )
+            );
+          }
+        } else {
+          // Add as new item
+          setKitchenItems(prev => [...prev, item]);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing items:', error);
+      Alert.alert('Error', 'Failed to add some items. Please try again.');
+    }
+  };
+
+  const handleAddItem = async (item: any, isUpdate: boolean = false) => {
+    try {
+      if (isUpdate) {
+        // For updates, just update the state with the new item
+        setKitchenItems(prev => 
+          prev.map(existing => 
+            existing.$id === item.$id ? item : existing
+          )
+        );
+      } else {
+        // For new items, check for duplicates and handle combining
+        const existingItemIndex = findMatchingItem(item);
+        
+        if (existingItemIndex !== -1) {
+          const existingItem = kitchenItems[existingItemIndex];
+          
+          // If units are different, ask user to confirm combination
+          if (existingItem.unit.toLowerCase() !== item.unit.toLowerCase()) {
+            // Calculate converted quantity for display
+            const convertedQuantity = convertQuantity(
+              item.quantity,
+              item.unit,
+              existingItem.unit
+            );
+            
+            // Show alert and wait for user response
+            await new Promise((resolve) => {
+              Alert.alert(
+                "Different Units",
+                `There's already ${existingItem.name} with ${formatQuantity(existingItem.quantity)} ${existingItem.unit}. ` +
+                `Adding ${formatQuantity(item.quantity)} ${item.unit} (≈ ${formatQuantity(convertedQuantity)} ${existingItem.unit}). ` +
+                `Would you like to keep this as a separate entry?`,
+                [
+                  {
+                    text: "Keep Separate",
+                    style: "cancel",
+                    onPress: () => {
+                      setKitchenItems(prev => [...prev, item]);
+                      resolve(null);
+                    }
+                  },
+                  {
+                    text: "Convert & Combine",
+                    style: "default",
+                    onPress: async () => {
+                      const updatedItem = {
+                        ...existingItem,
+                        quantity: existingItem.quantity + convertedQuantity
+                      };
+                      await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
+                      setKitchenItems(prev => 
+                        prev.map((prevItem, index) => 
+                          index === existingItemIndex ? updatedItem : prevItem
+                        )
+                      );
+                      resolve(null);
+                    }
+                  }
+                ]
+              );
+            });
+          } else {
+            // Same units, combine directly
+            const updatedItem = {
+              ...existingItem,
+              quantity: existingItem.quantity + item.quantity
+            };
+            await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
+            setKitchenItems(prev => 
+              prev.map((prevItem, index) => 
+                index === existingItemIndex ? updatedItem : prevItem
+              )
+            );
+          }
+        } else {
+          // Add as new item
+          setKitchenItems(prev => [...prev, item]);
+        }
+      }
+    } catch (error) {
+      console.error('Error adding item:', error);
+      Alert.alert('Error', 'Failed to add item. Please try again.');
+    }
   };
 
   const handleEditItem = (editedItem: any) => {
@@ -76,14 +347,16 @@ export default function PantryScreen() {
     }
   };
 
-  const handleAddItems = (items: any[]) => {
-    setKitchenItems((prevItems) => [...prevItems, ...items]);
-  };
-
   // Filter items based on search query
   const filteredItems = kitchenItems.filter(item =>
     item.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleBackToInputType = () => {
+    setShowAddModal(false);
+    setShowVoiceModal(false);
+    setShowInputTypeModal(true);
+  };
 
   const renderInputTypeModal = () => (
     <Modal
@@ -92,8 +365,16 @@ export default function PantryScreen() {
       animationType="fade"
       onRequestClose={() => setShowInputTypeModal(false)}
     >
-      <View style={styles.inputTypeModalContainer}>
-        <View style={styles.inputTypeContent}>
+      <TouchableOpacity 
+        style={styles.inputTypeModalContainer}
+        activeOpacity={1}
+        onPress={() => setShowInputTypeModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.inputTypeContent}
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+        >
           <Text style={styles.inputTypeTitle}>Add Items</Text>
           
           <TouchableOpacity 
@@ -124,8 +405,8 @@ export default function PantryScreen() {
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 
@@ -183,12 +464,14 @@ export default function PantryScreen() {
           visible={showAddModal}
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddItem}
+          onBack={handleBackToInputType}
         />
 
         <VoiceItemsModal
           visible={showVoiceModal}
           onClose={() => setShowVoiceModal(false)}
           onAddItems={handleAddItems}
+          onBack={handleBackToInputType}
         />
 
         {selectedItem && (
