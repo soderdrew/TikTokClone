@@ -10,10 +10,12 @@ import {
   Platform,
   Image,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FOOD_ICONS, getFoodIcon, FoodIconType } from '../../constants/foodIcons';
 import { createInventoryItem } from '../../services/inventoryService';
+import { AudioService } from '../../services/audioService';
 
 // Common units for food items
 const UNITS = {
@@ -43,6 +45,10 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
   const [autoMatchedIcon, setAutoMatchedIcon] = useState<any>(null);
   const [customUnit, setCustomUnit] = useState('');
   const [showCustomUnitInput, setShowCustomUnitInput] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const audioService = new AudioService();
 
   useEffect(() => {
     if (visible) {
@@ -86,6 +92,31 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
     const currentQty = parseInt(quantity) || 0;
     const newQty = Math.max(0, currentQty + change);
     setQuantity(newQty.toString());
+  };
+
+  const startRecording = async () => {
+    try {
+      setIsRecording(true);
+      await audioService.startRecording();
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      const audioUri = await audioService.stopRecording();
+      setIsRecording(false);
+      setIsTranscribing(true);
+
+      const transcription = await audioService.transcribeAudio(audioUri);
+      setName(transcription);
+    } catch (error) {
+      console.error('Failed to process recording:', error);
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
   const renderIconSelector = () => {
@@ -219,7 +250,27 @@ export default function AddItemModal({ visible, onClose, onAdd }: Props) {
                       onChangeText={setName}
                       placeholder="Enter item name"
                       placeholderTextColor="#666"
+                      editable={!isRecording && !isTranscribing}
                     />
+                    <TouchableOpacity
+                      onPressIn={startRecording}
+                      onPressOut={stopRecording}
+                      style={[
+                        styles.micButton,
+                        isRecording && styles.micButtonRecording
+                      ]}
+                      disabled={isTranscribing}
+                    >
+                      {isTranscribing ? (
+                        <ActivityIndicator color="white" size="small" />
+                      ) : (
+                        <Ionicons
+                          name={isRecording ? "radio" : "mic"}
+                          size={24}
+                          color="white"
+                        />
+                      )}
+                    </TouchableOpacity>
                     <Image
                       source={selectedIcon ? FOOD_ICONS[selectedIcon] : (autoMatchedIcon || FOOD_ICONS.default)}
                       style={styles.autoIcon}
@@ -529,5 +580,20 @@ const styles = StyleSheet.create({
   },
   customUnitInput: {
     width: '100%',
+  },
+  micButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4a9eff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 8,
+    borderWidth: 2,
+    borderColor: '#2d7cd1',
+  },
+  micButtonRecording: {
+    backgroundColor: '#ff4444',
+    borderColor: '#cc3333',
   },
 }); 

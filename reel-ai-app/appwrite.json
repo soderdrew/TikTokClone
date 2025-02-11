@@ -884,6 +884,24 @@
             "entrypoint": "src/main.js",
             "commands": "npm install",
             "path": "functions/generateSummaries"
+        },
+        {
+            "$id": "transcribeAudio",
+            "name": "transcribeAudio",
+            "runtime": "node-18.0",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [],
+            "schedule": "",
+            "timeout": 120,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "path": "functions/transcribeAudio"
         }
     ]
 }
