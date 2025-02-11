@@ -63,11 +63,38 @@ export default async ({ req, res, log, error }) => {
         messages: [
           {
             role: "system",
-            content: `You are a helpful assistant that parses ingredient lists into structured data. 
+            content: `You are a helpful assistant that parses ingredient lists into structured data.
             Extract ingredients with their quantities and units from the text.
             If a quantity is not specified, assume 1.
             If a unit is not specified, use a sensible default unit based on the ingredient type.
-            Respond with a JSON array of objects, each with name, quantity, and unit properties.`
+            
+            Expected output format:
+            {
+              "items": [
+                {
+                  "name": "ingredient name",
+                  "quantity": number,
+                  "unit": "unit"
+                },
+                ...
+              ]
+            }
+            
+            Example input: "I have three gallons of milk and two slices of bread"
+            Example output: {
+              "items": [
+                {
+                  "name": "milk",
+                  "quantity": 3,
+                  "unit": "gallons"
+                },
+                {
+                  "name": "bread",
+                  "quantity": 2,
+                  "unit": "slices"
+                }
+              ]
+            }`
           },
           {
             role: "user",
@@ -75,7 +102,7 @@ export default async ({ req, res, log, error }) => {
           }
         ],
         response_format: { type: "json_object" },
-        temperature: 0.7,
+        temperature: 0.3,
       });
 
       // Parse the GPT response
