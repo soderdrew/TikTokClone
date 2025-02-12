@@ -53,11 +53,13 @@ const COLLECTIONS = {
 
 // Add this interface after the COLLECTIONS constant
 interface RecipeFilters {
-  dietary?: string[];
-  cookTime?: string[];
   cuisine?: string[];
   difficulty?: string[];
+  cookingTime?: string[];
+  dietaryFlags?: string[];
 }
+
+type TimeRange = 'Under 15 mins' | '15-30 mins' | '30-60 mins' | 'Over 60 mins';
 
 // Authentication service
 export const AuthService = {
@@ -859,17 +861,47 @@ export const DatabaseService = {
 
             // Add filter queries
             if (filters) {
-                if (filters.dietary?.length) {
-                    queries.push(Query.search('dietary', filters.dietary.join(' ')));
+                if (filters.cuisine && filters.cuisine.length === 1) {
+                    queries.push(Query.equal('cuisine', filters.cuisine[0]));
+                } else if (filters.cuisine && filters.cuisine.length > 1) {
+                    queries.push(Query.equal('cuisine', filters.cuisine));
                 }
-                if (filters.cookTime?.length) {
-                    queries.push(Query.search('cookTime', filters.cookTime.join(' ')));
+                
+                if (filters.difficulty && filters.difficulty.length === 1) {
+                    queries.push(Query.equal('difficulty', filters.difficulty[0]));
+                } else if (filters.difficulty && filters.difficulty.length > 1) {
+                    queries.push(Query.equal('difficulty', filters.difficulty));
                 }
-                if (filters.cuisine?.length) {
-                    queries.push(Query.search('cuisine', filters.cuisine.join(' ')));
+
+                if (filters.cookingTime && filters.cookingTime.length > 0) {
+                    // Convert time ranges to actual numbers for comparison
+                    const timeRanges = filters.cookingTime.map((value: string) => {
+                        const range = value as TimeRange;
+                        if (range === 'Under 15 mins') return Query.lessThan('cookingTime', 15);
+                        if (range === '15-30 mins') return Query.and([
+                            Query.greaterThanEqual('cookingTime', 15),
+                            Query.lessThanEqual('cookingTime', 30)
+                        ]);
+                        if (range === '30-60 mins') return Query.and([
+                            Query.greaterThanEqual('cookingTime', 30),
+                            Query.lessThanEqual('cookingTime', 60)
+                        ]);
+                        if (range === 'Over 60 mins') return Query.greaterThan('cookingTime', 60);
+                        return null;
+                    }).filter((q): q is NonNullable<typeof q> => q !== null);
+
+                    if (timeRanges.length === 1) {
+                        queries.push(timeRanges[0]);
+                    } else if (timeRanges.length > 1) {
+                        queries.push(Query.or(timeRanges));
+                    }
                 }
-                if (filters.difficulty?.length) {
-                    queries.push(Query.search('difficulty', filters.difficulty.join(' ')));
+
+                if (filters.dietaryFlags && filters.dietaryFlags.length > 0) {
+                    // Only show recipes that have ALL selected dietary flags
+                    filters.dietaryFlags.forEach(flag => {
+                        queries.push(Query.equal('dietaryFlags', flag));
+                    });
                 }
             }
 
@@ -900,14 +932,41 @@ export const DatabaseService = {
 
             // Add filter queries
             if (filters) {
-                if (filters.dietary?.length) {
-                    queries.push(Query.search('dietary', filters.dietary.join(' ')));
+                if (filters.difficulty && filters.difficulty.length === 1) {
+                    queries.push(Query.equal('difficulty', filters.difficulty[0]));
+                } else if (filters.difficulty && filters.difficulty.length > 1) {
+                    queries.push(Query.equal('difficulty', filters.difficulty));
                 }
-                if (filters.cookTime?.length) {
-                    queries.push(Query.search('cookTime', filters.cookTime.join(' ')));
+
+                if (filters.cookingTime && filters.cookingTime.length > 0) {
+                    // Convert time ranges to actual numbers for comparison
+                    const timeRanges = filters.cookingTime.map((value: string) => {
+                        const range = value as TimeRange;
+                        if (range === 'Under 15 mins') return Query.lessThan('cookingTime', 15);
+                        if (range === '15-30 mins') return Query.and([
+                            Query.greaterThanEqual('cookingTime', 15),
+                            Query.lessThanEqual('cookingTime', 30)
+                        ]);
+                        if (range === '30-60 mins') return Query.and([
+                            Query.greaterThanEqual('cookingTime', 30),
+                            Query.lessThanEqual('cookingTime', 60)
+                        ]);
+                        if (range === 'Over 60 mins') return Query.greaterThan('cookingTime', 60);
+                        return null;
+                    }).filter((q): q is NonNullable<typeof q> => q !== null);
+
+                    if (timeRanges.length === 1) {
+                        queries.push(timeRanges[0]);
+                    } else if (timeRanges.length > 1) {
+                        queries.push(Query.or(timeRanges));
+                    }
                 }
-                if (filters.difficulty?.length) {
-                    queries.push(Query.search('difficulty', filters.difficulty.join(' ')));
+
+                if (filters.dietaryFlags && filters.dietaryFlags.length > 0) {
+                    // Only show recipes that have ALL selected dietary flags
+                    filters.dietaryFlags.forEach(flag => {
+                        queries.push(Query.equal('dietaryFlags', flag));
+                    });
                 }
             }
 

@@ -67,8 +67,8 @@ export default function ExploreScreen() {
   // New state for filters
   const [activeFilterId, setActiveFilterId] = React.useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = React.useState<Filters>({
-    dietary: [],
-    cookTime: [],
+    dietaryFlags: [],
+    cookingTime: [],
     cuisine: [],
     difficulty: [],
   });
@@ -153,8 +153,8 @@ export default function ExploreScreen() {
       const filters = {
         cuisine: selectedFilters.cuisine.length > 0 ? selectedFilters.cuisine : undefined,
         difficulty: selectedFilters.difficulty.length > 0 ? selectedFilters.difficulty : undefined,
-        cookTime: selectedFilters.cookTime.length > 0 ? selectedFilters.cookTime : undefined,
-        dietary: selectedFilters.dietary.length > 0 ? selectedFilters.dietary : undefined,
+        cookingTime: selectedFilters.cookingTime.length > 0 ? selectedFilters.cookingTime : undefined,
+        dietaryFlags: selectedFilters.dietaryFlags.length > 0 ? selectedFilters.dietaryFlags : undefined,
       };
 
       if (selectedCategory) {
@@ -235,6 +235,22 @@ export default function ExploreScreen() {
         useNativeDriver: true,
       }).start();
     }
+  };
+
+  const handleSearchSubmit = () => {
+    setShowSearchHistory(false);
+    Keyboard.dismiss();
+    // Force a search by updating the query
+    setSearchQuery(searchQuery);
+  };
+
+  const handleClearAllFilters = () => {
+    setSelectedFilters({
+      dietaryFlags: [],
+      cookingTime: [],
+      cuisine: [],
+      difficulty: [],
+    });
   };
 
   const handleHistoryItemPress = async (query: string) => {
@@ -369,6 +385,8 @@ export default function ExploreScreen() {
             value={searchQuery}
             onChangeText={handleSearchChange}
             onFocus={handleSearchFocus}
+            onSubmitEditing={handleSearchSubmit}
+            returnKeyType="search"
           />
           {searchQuery ? (
             <TouchableOpacity onPress={() => handleSearchChange('')}>
@@ -377,27 +395,37 @@ export default function ExploreScreen() {
           ) : null}
         </View>
 
-        {/* Filter Buttons - Always show */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[
-            styles.filterContainer,
-            showSearchHistory && styles.hideFilters
-          ]}
-          contentContainerStyle={styles.filterContentContainer}
-        >
-          {filterCategories.map((category) => (
-            <FilterButton
-              key={category.id}
-              title={category.title}
-              icon={category.icon}
-              onPress={() => handleFilterPress(category.id)}
-              isActive={activeFilterId === category.id}
-              hasSelectedFilters={selectedFilters[category.id as keyof Filters].length > 0}
-            />
-          ))}
-        </ScrollView>
+        {/* Filter Section */}
+        <View style={styles.filterSection}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={[
+              styles.filterContainer,
+              showSearchHistory && styles.hideFilters
+            ]}
+            contentContainerStyle={styles.filterContentContainer}
+          >
+            {filterCategories.map((category) => (
+              <FilterButton
+                key={category.id}
+                title={category.title}
+                icon={category.icon}
+                onPress={() => handleFilterPress(category.id)}
+                isActive={activeFilterId === category.id}
+                hasSelectedFilters={selectedFilters[category.id as keyof Filters].length > 0}
+              />
+            ))}
+          </ScrollView>
+          {Object.values(selectedFilters).some(filters => filters.length > 0) && (
+            <TouchableOpacity
+              style={styles.clearFiltersButton}
+              onPress={handleClearAllFilters}
+            >
+              <Text style={styles.clearFiltersText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Filter Modals */}
         {filterCategories.map((category) => (
@@ -563,9 +591,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     height: '100%',
   },
-  filterContainer: {
-    marginVertical: 8,
+  filterSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginHorizontal: 15,
+  },
+  filterContainer: {
+    flex: 1,
+    marginVertical: 8,
     height: 36,
   },
   filterContentContainer: {
@@ -706,5 +739,17 @@ const styles = StyleSheet.create({
   },
   hideFilters: {
     display: 'none',
+  },
+  clearFiltersButton: {
+    marginLeft: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#333',
+  },
+  clearFiltersText: {
+    color: '#ff4444',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

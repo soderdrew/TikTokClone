@@ -6,15 +6,15 @@ export interface FilterCategory {
 }
 
 export interface Filters {
-  dietary: string[];
-  cookTime: string[];
+  dietaryFlags: string[];
+  cookingTime: string[];
   cuisine: string[];
   difficulty: string[];
 }
 
 export const filterCategories: FilterCategory[] = [
   {
-    id: 'dietary',
+    id: 'dietaryFlags',
     title: 'Dietary',
     icon: 'leaf-outline',
     items: [
@@ -28,7 +28,7 @@ export const filterCategories: FilterCategory[] = [
     ],
   },
   {
-    id: 'cookTime',
+    id: 'cookingTime',
     title: 'Cook Time',
     icon: 'time-outline',
     items: [

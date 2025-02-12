@@ -29,7 +29,7 @@ export default function FilterButton({
       <Ionicons
         name={icon as any}
         size={20}
-        color={isActive || hasSelectedFilters ? '#fff' : '#000'}
+        color={'#fff'}
       />
       <Text
         style={[

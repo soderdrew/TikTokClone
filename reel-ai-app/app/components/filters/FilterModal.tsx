@@ -7,6 +7,7 @@ import {
   StyleSheet,
   ScrollView,
   Dimensions,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -59,48 +60,52 @@ export default function FilterModal({
       transparent={true}
       onRequestClose={onClose}
     >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalContent}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#000" />
-            </TouchableOpacity>
-            <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
-              <Text style={styles.clearText}>Clear</Text>
-            </TouchableOpacity>
-          </View>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={styles.modalContainer}>
+          <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
+            <View style={styles.modalContent}>
+              <View style={styles.header}>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.title}>{title}</Text>
+                <TouchableOpacity onPress={handleClear} style={styles.clearButton}>
+                  <Text style={styles.clearText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
 
-          <ScrollView style={styles.itemsContainer}>
-            {items.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={[
-                  styles.itemButton,
-                  localSelectedItems.includes(item) && styles.selectedItem,
-                ]}
-                onPress={() => toggleItem(item)}
-              >
-                <Text
-                  style={[
-                    styles.itemText,
-                    localSelectedItems.includes(item) && styles.selectedItemText,
-                  ]}
-                >
-                  {item}
-                </Text>
-                {localSelectedItems.includes(item) && (
-                  <Ionicons name="checkmark" size={20} color="#fff" />
-                )}
+              <ScrollView style={styles.itemsContainer}>
+                {items.map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.itemButton,
+                      localSelectedItems.includes(item) && styles.selectedItem,
+                    ]}
+                    onPress={() => toggleItem(item)}
+                  >
+                    <Text
+                      style={[
+                        styles.itemText,
+                        localSelectedItems.includes(item) && styles.selectedItemText,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                    {localSelectedItems.includes(item) && (
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
+                <Text style={styles.applyButtonText}>Apply</Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply}>
-            <Text style={styles.applyButtonText}>Apply</Text>
-          </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }
