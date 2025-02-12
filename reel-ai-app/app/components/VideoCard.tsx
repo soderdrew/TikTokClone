@@ -51,6 +51,8 @@ interface VideoCardProps {
     onLike: () => void;
     onComment: () => void;
     onSave: () => void;
+    videoRef?: (ref: any) => void;
+    isVisible?: boolean;
 }
 
 interface PlaybackStatus {
@@ -72,7 +74,9 @@ const VideoCard: React.FC<VideoCardProps> = ({
     variant = 'home',
     onLike,
     onComment,
-    onSave
+    onSave,
+    videoRef,
+    isVisible = false
 }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [showRecipe, setShowRecipe] = useState(false);
@@ -97,6 +101,24 @@ const VideoCard: React.FC<VideoCardProps> = ({
         setLocalIsLiked(initialIsLiked);
         setLocalIsSaved(initialIsSaved);
     }, [initialIsLiked, initialIsSaved]);
+
+    // Update isPlaying when visibility changes
+    useEffect(() => {
+        if (isVisible && playerRef.current) {
+            playerRef.current.play();
+            setIsPlaying(true);
+        } else if (!isVisible && playerRef.current) {
+            playerRef.current.pause();
+            setIsPlaying(false);
+        }
+    }, [isVisible]);
+
+    // Pass playerRef to parent component
+    useEffect(() => {
+        if (videoRef) {
+            videoRef(playerRef);
+        }
+    }, [videoRef]);
 
     const handleLike = () => {
         setLocalIsLiked(prev => !prev);
@@ -162,6 +184,12 @@ const VideoCard: React.FC<VideoCardProps> = ({
                 cleanupPlayer();
             }
             playerRef.current = player;
+            
+            // Auto-play if visible
+            if (isVisible) {
+                player.play();
+                setIsPlaying(true);
+            }
         } catch (error) {
             console.error('Failed to initialize player:', error);
             setIsVideoError(true);
@@ -262,7 +290,7 @@ const VideoCard: React.FC<VideoCardProps> = ({
         }
 
         try {
-            if (playerRef.current.playing) {
+            if (isPlaying) {
                 playerRef.current.pause();
                 setIsPlaying(false);
             } else {

@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator, ViewToken } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { MemoizedVideoCard as VideoCard } from '../components/VideoCard';
 import InteractionButton from '../components/common/InteractionButton';
 import LikeButton from '../components/interactions/LikeButton';
@@ -48,6 +48,8 @@ export default function HomeScreen() {
     const flatListRef = React.useRef<FlatList>(null);
     const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
     const [hasMoreVideos, setHasMoreVideos] = useState<boolean>(true);
+    const videoRefs = useRef<{ [key: string]: any }>({});
+    const [currentlyPlayingId, setCurrentlyPlayingId] = useState<string | null>(null);
 
     const checkAuth = async () => {
         const isLoggedIn = await AuthService.isLoggedIn();
@@ -293,18 +295,50 @@ export default function HomeScreen() {
     const viewabilityConfig = React.useRef({
         itemVisiblePercentThreshold: 50,
         minimumViewTime: 300,
+        waitForInteraction: false,
     }).current;
 
+    const pauseNonViewableVideos = () => {
+        if (!videoRefs.current) return;
+        
+        Object.entries(videoRefs.current).forEach(([id, ref]) => {
+            if (id !== currentlyPlayingId && ref?.current?.pause) {
+                ref.current.pause();
+            }
+        });
+    };
+
     const onViewableItemsChanged = React.useCallback(({ 
-        viewableItems 
+        viewableItems,
+        changed
     }: { 
         viewableItems: Array<ViewToken>;
         changed: Array<ViewToken>;
     }) => {
-        if (viewableItems.length > 0 && viewableItems[0].index !== null) {
-            setCurrentVideoIndex(viewableItems[0].index);
+        if (viewableItems.length > 0 && viewableItems[0].item?.$id) {
+            const newVideoId = viewableItems[0].item.$id;
+            
+            // Pause previous video if it exists
+            if (currentlyPlayingId && 
+                currentlyPlayingId !== newVideoId && 
+                videoRefs.current[currentlyPlayingId]?.current?.pause) {
+                videoRefs.current[currentlyPlayingId].current.pause();
+            }
+
+            // Play new video
+            if (videoRefs.current[newVideoId]?.current?.play) {
+                videoRefs.current[newVideoId].current.play();
+                setCurrentlyPlayingId(newVideoId);
+            }
+
+            // Pause all other videos
+            pauseNonViewableVideos();
+            
+            if (viewableItems[0].index !== null) {
+                setCurrentVideoIndex(viewableItems[0].index);
+            }
         }
-    }, []);
+    }, [currentlyPlayingId]);
 
     const handleLoadMore = async () => {
         if (!hasMoreVideos || loading) return;
@@ -391,6 +425,12 @@ export default function HomeScreen() {
               }
               handleBookmark(item);
             }}
+            videoRef={(ref: any) => {
+              if (ref) {
+                videoRefs.current[item.$id] = ref;
+              }
+            }}
+            isVisible={currentlyPlayingId === item.$id}
           />
         )}
         keyExtractor={(item) => item.$id}

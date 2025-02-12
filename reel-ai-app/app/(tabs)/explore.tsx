@@ -276,7 +276,10 @@ export default function ExploreScreen() {
   );
 
   const navigateToRecipe = (recipeId: string) => {
-    router.push(`/(video)/${recipeId}`);
+    router.push({
+      pathname: `/(video)/${recipeId}`,
+      params: { autoPlay: 'true' }
+    });
   };
 
   const dismissKeyboardAndSearch = () => {

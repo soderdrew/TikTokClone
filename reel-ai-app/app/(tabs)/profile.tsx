@@ -231,7 +231,10 @@ export default function ProfileScreen() {
   const renderVideo = ({ item }: { item: Video }) => (
     <TouchableOpacity 
       style={styles.videoCard}
-      onPress={() => router.push(`/(video)/${item.$id}`)}
+      onPress={() => router.push({
+        pathname: `/(video)/${item.$id}`,
+        params: { autoPlay: 'true' }
+      })}
     >
       <Image
         source={{ uri: item.thumbnailUrl }}
@@ -253,7 +256,10 @@ export default function ProfileScreen() {
       style={styles.reviewCard}
       onPress={() => router.push({
         pathname: `/(video)/${item.videoId}`,
-        params: { initialTab: 'reviews' }
+        params: { 
+          initialTab: 'reviews',
+          autoPlay: 'true'
+        }
       })}
     >
       <Text style={styles.reviewVideoTitle} numberOfLines={1}>

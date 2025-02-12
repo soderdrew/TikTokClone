@@ -30,7 +30,7 @@ const { width, height } = Dimensions.get('window');
 const BOTTOM_TAB_HEIGHT = 60;
 
 export default function VideoDetailScreen() {
-  const { id } = useLocalSearchParams();
+  const { id, autoPlay } = useLocalSearchParams();
   const [video, setVideo] = useState<Video | null>(null);
   const [creator, setCreator] = useState<{ name: string; avatarUrl?: string; userId: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -166,6 +166,7 @@ export default function VideoDetailScreen() {
           // Comment handling is built into VideoCard
         }}
         onSave={handleSave}
+        isVisible={String(autoPlay).toLowerCase() === 'true'}
       />
     </View>
   );
