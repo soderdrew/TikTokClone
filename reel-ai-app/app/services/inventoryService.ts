@@ -208,7 +208,7 @@ export const updateInventoryItem = async (documentId: string, updatedData: any) 
         throw error;
     }
 };
-
+ 
 // Delete an inventory item
 export const deleteInventoryItem = async (documentId: string) => {
     try {

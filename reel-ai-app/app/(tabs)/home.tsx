@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Dimensions, ActivityIndicator, ViewToken } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { MemoizedVideoCard as VideoCard } from '../components/VideoCard';
@@ -10,6 +10,7 @@ import BookmarkButton from '../components/interactions/BookmarkButton';
 import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { useRouter } from 'expo-router';
+// import { Query } from 'appwrite';
 
 const { width, height } = Dimensions.get('window');
 const BOTTOM_TAB_HEIGHT = 60; // Standard bottom tab height
@@ -45,6 +46,8 @@ export default function HomeScreen() {
     const [currentUserId, setCurrentUserId] = useState<string>('');
     const [savedRecipes, setSavedRecipes] = useState<Set<string>>(new Set());
     const flatListRef = React.useRef<FlatList>(null);
+    const [currentVideoIndex, setCurrentVideoIndex] = useState<number>(0);
+    const [hasMoreVideos, setHasMoreVideos] = useState<boolean>(true);
 
     const checkAuth = async () => {
         const isLoggedIn = await AuthService.isLoggedIn();
@@ -60,19 +63,19 @@ export default function HomeScreen() {
         return true;
     };
 
-    const loadVideos = async () => {
+    const loadVideos = async (loadMore: boolean = false) => {
         console.log('Starting to load videos...');
         try {
             const isAuthenticated = await checkAuth();
             console.log('Auth check completed:', isAuthenticated);
-            if (!isAuthenticated) return;
+            if (!isAuthenticated) return [];
 
             // Get current user ID first
             const user = await AuthService.getCurrentUser();
             console.log('Current user fetched:', user ? 'success' : 'failed');
             if (!user) {
                 console.error('No user found');
-                return;
+                return [];
             }
             setCurrentUserId(user.$id);
 
@@ -80,9 +83,14 @@ export default function HomeScreen() {
             await DatabaseService.updateAllVideoThumbnails();
 
             console.log('Fetching videos...');
-            const response = await DatabaseService.getVideos(10);
+            const response = await DatabaseService.getVideos(10, loadMore ? videos[videos.length - 1].$id : undefined);
             console.log('Videos fetched:', response.documents.length);
-            setVideos(response.documents as Video[]);
+            
+            const newVideos = response.documents as Video[];
+            
+            if (!loadMore) {
+                setVideos(newVideos);
+            }
 
             // Fetch creator profiles and like statuses
             console.log('Starting to fetch creator profiles and statuses...');
@@ -90,7 +98,7 @@ export default function HomeScreen() {
             const newLikedVideos = new Set<string>();
             const newSavedRecipes = new Set<string>();
 
-            for (const video of response.documents) {
+            for (const video of newVideos) {
                 // Fetch creator profile if not already fetched
                 if (!creatorProfiles[video.userId]) {
                     try {
@@ -132,9 +140,17 @@ export default function HomeScreen() {
             }
 
             console.log('All profiles and statuses fetched');
-            setCreators(creatorProfiles);
-            setLikedVideos(newLikedVideos);
-            setSavedRecipes(newSavedRecipes);
+            if (!loadMore) {
+                setCreators(creatorProfiles);
+                setLikedVideos(newLikedVideos);
+                setSavedRecipes(newSavedRecipes);
+            } else {
+                setCreators(prev => ({ ...prev, ...creatorProfiles }));
+                setLikedVideos(prev => new Set([...prev, ...newLikedVideos]));
+                setSavedRecipes(prev => new Set([...prev, ...newSavedRecipes]));
+            }
+
+            return newVideos;
         } catch (error) {
             console.error('Error loading videos:', error);
             if (error instanceof Error) {
@@ -143,6 +159,9 @@ export default function HomeScreen() {
                     router.replace('/auth/login');
                 }
             }
+            setLoading(false);
+            setRefreshing(false);
+            return [];
         } finally {
             console.log('Load videos completed');
             setLoading(false);
@@ -271,6 +290,66 @@ export default function HomeScreen() {
         }
     };
 
+    const viewabilityConfig = React.useRef({
+        itemVisiblePercentThreshold: 50,
+        minimumViewTime: 300,
+    }).current;
+
+    const onViewableItemsChanged = React.useCallback(({ 
+        viewableItems 
+    }: { 
+        viewableItems: Array<ViewToken>;
+        changed: Array<ViewToken>;
+    }) => {
+        if (viewableItems.length > 0 && viewableItems[0].index !== null) {
+            setCurrentVideoIndex(viewableItems[0].index);
+        }
+    }, []);
+
+    const handleLoadMore = async () => {
+        if (!hasMoreVideos || loading) return;
+        
+        try {
+            const newVideos = await loadVideos(true);
+            if (!newVideos || newVideos.length === 0) {
+                setHasMoreVideos(false);
+            } else {
+                setVideos(prev => [...prev, ...newVideos]);
+            }
+        } catch (error) {
+            console.error('Error loading more videos:', error);
+            setHasMoreVideos(false);
+        }
+    };
+
+    const handleEndReached = () => {
+        if (!hasMoreVideos && videos.length > 0) {
+            // Scroll back to the last video with animation
+            flatListRef.current?.scrollToIndex({
+                index: videos.length - 1,
+                animated: true,
+                viewPosition: 0 // Ensure it's fully visible
+            });
+        } else {
+            // Load more videos if available
+            handleLoadMore();
+        }
+    };
+
+    const handleMomentumScrollEnd = (event: any) => {
+        const y = event.nativeEvent.contentOffset.y;
+        const maxScroll = (videos.length - 1) * height;
+        
+        // If scrolled past the last video, bounce back
+        if (y > maxScroll && !hasMoreVideos) {
+            flatListRef.current?.scrollToIndex({
+                index: videos.length - 1,
+                animated: true,
+                viewPosition: 0
+            });
+        }
+    };
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -282,42 +361,8 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <FlatList
-        data={videos}
-        snapToInterval={height}
-        decelerationRate="fast"
-        bounces={false}
-        showsVerticalScrollIndicator={false}
-        snapToAlignment="start"
-        pagingEnabled={true}
-        windowSize={3}
-        initialNumToRender={2}
-        maxToRenderPerBatch={3}
-        removeClippedSubviews={true}
-        getItemLayout={(data, index) => ({
-          length: height,
-          offset: height * index,
-          index,
-        })}
-        viewabilityConfig={{
-          itemVisiblePercentThreshold: 50
-        }}
-        onRefresh={loadVideos}
-        refreshing={refreshing}
-        contentContainerStyle={{
-          paddingBottom: BOTTOM_TAB_HEIGHT
-        }}
-        onMomentumScrollEnd={(event) => {
-          const y = event.nativeEvent.contentOffset.y;
-          const maxScroll = (videos.length - 1) * height;
-          
-          if (y > maxScroll) {
-            flatListRef.current?.scrollToOffset({
-              offset: maxScroll,
-              animated: true
-            });
-          }
-        }}
         ref={flatListRef}
+        data={videos}
         renderItem={({ item }) => (
           <VideoCard
             key={item.$id}
@@ -348,6 +393,33 @@ export default function HomeScreen() {
             }}
           />
         )}
+        keyExtractor={(item) => item.$id}
+        pagingEnabled
+        showsVerticalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.5}
+        snapToInterval={height}
+        decelerationRate="fast"
+        snapToAlignment="start"
+        bounces={false}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
+        getItemLayout={(data, index) => ({
+          length: height,
+          offset: height * index,
+          index,
+        })}
+        initialNumToRender={3}
+        maxToRenderPerBatch={3}
+        windowSize={5}
+        removeClippedSubviews={true}
+        onRefresh={loadVideos}
+        refreshing={refreshing}
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingBottom: BOTTOM_TAB_HEIGHT
+        }}
       />
     </View>
   );
