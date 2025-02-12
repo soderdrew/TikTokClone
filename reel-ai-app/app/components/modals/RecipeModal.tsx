@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { scaleRecipe } from '../../utils/recipeUtils';
+import { getInventoryItems } from '../../services/inventoryService';
+import { convertQuantity, areUnitsConvertible } from '../../services/inventoryService';
 
 interface RecipeModalProps {
     visible: boolean;
@@ -44,15 +46,12 @@ const formatIngredients = (ingredients?: string[]): string[] => {
         
         return matches
             .map(item => item.replace(/^"|"$/g, '')) // Remove surrounding quotes
-            .map(item => item.trim()) // Trim whitespace
-            .map(item => `- ${item}`) // Add bullet points
-            .filter(item => item.length > 2); // Remove empty items
+            .map(item => item.trim()); // Trim whitespace
     }
 
     // If it's already an array, clean and format
     return ingredients
-        .map(item => item.trim().replace(/^["']|["']$/g, ''))
-        .map(item => `- ${item}`);
+        .map(item => item.trim().replace(/^["']|["']$/g, ''));
 };
 
 const formatInstructions = (instructions?: string[]) => {
@@ -181,46 +180,200 @@ const scaleQuantity = (quantity: string, ratio: number): string => {
     return (parseFloat(quantity) * ratio).toFixed(1);
 };
 
-const IngredientQuantity = ({ ingredient, isScaled, scalingRatio = 1 }: { 
+interface IngredientStatus {
+    status: 'sufficient' | 'insufficient' | 'missing';
+    tooltip?: string;
+}
+
+const IngredientQuantity = ({ 
+    ingredient, 
+    isScaled, 
+    scalingRatio = 1, 
+    availabilityStatus 
+}: { 
     ingredient: string; 
     isScaled: boolean;
     scalingRatio?: number;
+    availabilityStatus?: { status: 'sufficient' | 'insufficient' | 'missing'; tooltip?: string };
 }) => {
+    const [showTooltip, setShowTooltip] = useState(false);
+
     // Match only the numeric part at the start
     const match = ingredient.match(/^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*(.*)/);
     
     if (!match) {
-        return <Text style={styles.listText}>{ingredient}</Text>;
+        return (
+            <TouchableOpacity 
+                onPress={() => availabilityStatus?.tooltip && setShowTooltip(!showTooltip)}
+                style={styles.ingredientContainer}
+            >
+                <Text style={[
+                    styles.listText,
+                    availabilityStatus?.status === 'sufficient' && styles.sufficientIngredient,
+                    availabilityStatus?.status === 'insufficient' && styles.insufficientIngredient
+                ]}>{ingredient}</Text>
+                {showTooltip && availabilityStatus?.tooltip && (
+                    <View style={styles.tooltip}>
+                        <Text style={styles.tooltipText}>{availabilityStatus.tooltip}</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+        );
     }
 
     const [_, quantity, remainingText] = match;
     const displayQuantity = isScaled ? scaleQuantity(quantity, scalingRatio) : quantity;
 
     return (
-        <View style={styles.ingredientRow}>
-            <View style={[
-                styles.quantityBox,
-                isScaled && styles.quantityBoxScaled
-            ]}>
-                <Text style={[
-                    styles.quantityText,
-                    isScaled && styles.quantityTextScaled
+        <TouchableOpacity 
+            onPress={() => availabilityStatus?.tooltip && setShowTooltip(!showTooltip)}
+            style={styles.ingredientContainer}
+        >
+            <View style={styles.ingredientRow}>
+                <View style={[
+                    styles.quantityBox,
+                    isScaled && styles.quantityBoxScaled
                 ]}>
-                    {displayQuantity}
-                </Text>
+                    <Text style={[
+                        styles.quantityText,
+                        isScaled && styles.quantityTextScaled
+                    ]}>
+                        {displayQuantity}
+                    </Text>
+                </View>
+                <Text style={[
+                    styles.listText,
+                    availabilityStatus?.status === 'sufficient' && styles.sufficientIngredient,
+                    availabilityStatus?.status === 'insufficient' && styles.insufficientIngredient
+                ]}>{remainingText.trim()}</Text>
             </View>
-            {remainingText && <Text style={styles.listText}>{remainingText.trim()}</Text>}
-        </View>
+            {showTooltip && availabilityStatus?.tooltip && (
+                <View style={styles.tooltip}>
+                    <Text style={styles.tooltipText}>{availabilityStatus.tooltip}</Text>
+                </View>
+            )}
+        </TouchableOpacity>
     );
 };
 
 export default function RecipeModal({ visible, onClose, recipe }: RecipeModalProps) {
     const [multiplier, setMultiplier] = useState(1);
+    const [kitchenInventory, setKitchenInventory] = useState<any[]>([]);
+    const [ingredientStatus, setIngredientStatus] = useState<{[key: string]: IngredientStatus}>({});
     const scalingRatio = multiplier;
-    
+
+    useEffect(() => {
+        if (visible) {
+            fetchKitchenInventory();
+        }
+    }, [visible]);
+
+    // Add a separate effect to recheck availability when multiplier changes
+    useEffect(() => {
+        if (kitchenInventory.length > 0) {
+            checkIngredientsAvailability(kitchenInventory);
+        }
+    }, [multiplier]);
+
+    const fetchKitchenInventory = async () => {
+        try {
+            const items = await getInventoryItems();
+            setKitchenInventory(items);
+            checkIngredientsAvailability(items);
+        } catch (error) {
+            console.error('Error fetching kitchen inventory:', error);
+        }
+    };
+
+    const parseIngredient = (ingredient: string) => {
+        // Remove any leading bullet points or dashes
+        const cleanIngredient = ingredient.replace(/^[-•]\s*/, '');
+        
+        // Match quantity, unit, and item name
+        const match = cleanIngredient.match(/^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*([a-zA-Z]+)?\s*(.*)/);
+        
+        if (!match) return null;
+        
+        const [_, quantity, unit, itemName] = match;
+        return {
+            quantity: parseFloat(eval(quantity.replace(' ', '+'))), // Safely evaluate fractions
+            unit: unit?.toLowerCase() || 'units',
+            itemName: itemName.toLowerCase().trim()
+        };
+    };
+
+    const checkIngredientsAvailability = (inventory: any[]) => {
+        const newStatus: {[key: string]: IngredientStatus} = {};
+        
+        const formattedIngredients = formatIngredients(recipe.ingredients);
+        formattedIngredients.forEach(ingredient => {
+            const parsed = parseIngredient(ingredient);
+            if (!parsed) {
+                newStatus[ingredient] = { 
+                    status: 'missing',
+                    tooltip: 'Ingredient not found in your pantry'
+                };
+                return;
+            }
+
+            // More strict matching: Split both names into words and check for exact word matches
+            const ingredientWords = parsed.itemName.split(/\s+/).filter((word: string) => word.length > 2);
+            const matchingItem = inventory.find(item => {
+                const itemWords = item.name.toLowerCase().split(/\s+/);
+                return ingredientWords.some((word: string) => 
+                    itemWords.some((itemWord: string) => 
+                        itemWord === word || 
+                        (itemWord.endsWith('s') && itemWord.slice(0, -1) === word) ||
+                        (word.endsWith('s') && word.slice(0, -1) === itemWord)
+                    )
+                );
+            });
+
+            if (!matchingItem) {
+                newStatus[ingredient] = { 
+                    status: 'missing',
+                    tooltip: 'Ingredient not found in your pantry'
+                };
+                return;
+            }
+
+            const scaledQuantity = parsed.quantity * multiplier;
+
+            if (areUnitsConvertible(parsed.unit, matchingItem.unit)) {
+                const convertedScaledQuantity = convertQuantity(scaledQuantity, parsed.unit, matchingItem.unit);
+                const isSufficient = matchingItem.quantity >= convertedScaledQuantity;
+                
+                if (isSufficient) {
+                    newStatus[ingredient] = { 
+                        status: 'sufficient',
+                        tooltip: `You have this ingredient. You have ${matchingItem.quantity} ${matchingItem.unit} (Recipe needs ${scaledQuantity} ${parsed.unit})`
+                    };
+                } else {
+                    const needed = convertedScaledQuantity - matchingItem.quantity;
+                    newStatus[ingredient] = { 
+                        status: 'insufficient',
+                        tooltip: `You have ${matchingItem.quantity} ${matchingItem.unit}. Need ${needed.toFixed(1)} ${matchingItem.unit} more (Recipe needs ${scaledQuantity} ${parsed.unit})`
+                    };
+                }
+            } else {
+                // Even for non-convertible units, show what we have
+                newStatus[ingredient] = { 
+                    status: 'sufficient',
+                    tooltip: `You have this ingredient. You have ${matchingItem.quantity} ${matchingItem.unit} (Recipe needs ${scaledQuantity} ${parsed.unit})`
+                };
+            }
+        });
+
+        setIngredientStatus(newStatus);
+    };
+
     const updateMultiplier = (newMultiplier: number) => {
         if (newMultiplier < 0.5 || newMultiplier > 10) return;
         setMultiplier(newMultiplier);
+        // Immediately recheck ingredients when multiplier changes
+        if (kitchenInventory.length > 0) {
+            checkIngredientsAvailability(kitchenInventory);
+        }
     };
 
     const ServingAdjuster = () => (
@@ -331,18 +484,17 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
                         {/* Ingredients with scaled quantities */}
                         {formattedIngredients.length > 0 && (
                             <CollapsibleSection title="Ingredients">
-                                {formattedIngredients.map((ingredient, index) => (
-                                    <View key={index} style={styles.listItem}>
-                                        <Text style={styles.bullet}>•</Text>
-                                        <View style={styles.ingredientContainer}>
-                                            <IngredientQuantity 
-                                                ingredient={ingredient.replace(/^-\s*/, '')} 
-                                                isScaled={scalingRatio !== 1}
-                                                scalingRatio={scalingRatio}
-                                            />
-                                        </View>
-                                    </View>
-                                ))}
+                                <View style={styles.list}>
+                                    {formattedIngredients.map((ingredient, index) => (
+                                        <IngredientQuantity
+                                            key={index}
+                                            ingredient={ingredient}
+                                            isScaled={multiplier !== 1}
+                                            scalingRatio={scalingRatio}
+                                            availabilityStatus={ingredientStatus[ingredient]}
+                                        />
+                                    ))}
+                                </View>
                             </CollapsibleSection>
                         )}
 
@@ -592,19 +744,19 @@ const styles = StyleSheet.create({
         minWidth: 90,
     },
     ingredientContainer: {
-        flex: 1,
+        marginBottom: 12,
     },
     ingredientRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 16,
     },
     quantityBox: {
         backgroundColor: '#f0f0f0',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 6,
-        minWidth: 70,
+        minWidth: 50,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
@@ -622,16 +774,24 @@ const styles = StyleSheet.create({
     quantityTextScaled: {
         color: '#1976d2',
     },
-    originalContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 8,
+        borderRadius: 6,
         marginTop: 4,
-        marginLeft: 8,
+        marginLeft: 66,
     },
-    originalLabel: {
+    tooltipText: {
+        color: 'white',
         fontSize: 12,
-        color: '#999',
-        fontStyle: 'italic',
-        marginRight: 4,
+    },
+    sufficientIngredient: {
+        color: '#4CAF50', // Light green
+    },
+    insufficientIngredient: {
+        color: '#FF9800', // Orange
+    },
+    list: {
+        padding: 20,
     },
 }); 

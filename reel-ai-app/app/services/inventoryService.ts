@@ -60,7 +60,7 @@ const getUnitType = (unit: string): 'VOLUME' | 'WEIGHT' | 'COUNT' | null => {
 };
 
 // Helper function to convert quantity between units
-const convertQuantity = (quantity: number, fromUnit: string, toUnit: string): number => {
+export const convertQuantity = (quantity: number, fromUnit: string, toUnit: string): number => {
     fromUnit = fromUnit.toLowerCase();
     toUnit = toUnit.toLowerCase();
 
@@ -84,7 +84,7 @@ const normalizeItemName = (name: string): string => {
 };
 
 // Helper function to check if units are convertible
-const areUnitsConvertible = (unit1: string, unit2: string): boolean => {
+export const areUnitsConvertible = (unit1: string, unit2: string): boolean => {
     const volumeUnits = new Set(['ml', 'l', 'cups', 'tbsp', 'tsp', 'gal', 'gallons', 'gallon', 'cup', 'liter', 'liters']);
     const weightUnits = new Set(['g', 'kg', 'oz', 'lbs', 'pound', 'pounds', 'gram', 'grams']);
     const countUnits = new Set(['pcs', 'pack', 'box', 'can', 'bottle', 'piece', 'pieces', 'slice', 'slices', 'unit', 'units']);
