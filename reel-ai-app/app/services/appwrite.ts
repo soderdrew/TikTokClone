@@ -51,6 +51,14 @@ const COLLECTIONS = {
     FOLLOWS: 'follows'  // Add follows collection
 };
 
+// Add this interface after the COLLECTIONS constant
+interface RecipeFilters {
+  dietary?: string[];
+  cookTime?: string[];
+  cuisine?: string[];
+  difficulty?: string[];
+}
+
 // Authentication service
 export const AuthService = {
     // Create a new account
@@ -838,53 +846,82 @@ export const DatabaseService = {
     },
 
     // Recipe Methods
-    getAllRecipes: async (limit: number = 10, lastId: string | null = null) => {
-        return retryOperation(async () => {
-            try {
-                const queries = [
-                    Query.orderDesc('$createdAt'),
-                    Query.limit(limit)
-                ];
-
-                if (lastId) {
-                    queries.push(Query.cursorAfter(lastId));
-                }
-
-                return await databases.listDocuments(
-                    DATABASE_ID,
-                    COLLECTIONS.VIDEOS,
-                    queries
-                );
-            } catch (error) {
-                console.error('Error getting all recipes:', error);
-                throw error;
+    getAllRecipes: async (limit: number = 10, lastId?: string | null, filters?: RecipeFilters) => {
+        try {
+            const queries: any[] = [
+                Query.orderDesc('createdAt'),
+                Query.limit(limit)
+            ];
+            
+            if (lastId) {
+                queries.push(Query.cursorAfter(lastId));
             }
-        });
+
+            // Add filter queries
+            if (filters) {
+                if (filters.dietary?.length) {
+                    queries.push(Query.search('dietary', filters.dietary.join(' ')));
+                }
+                if (filters.cookTime?.length) {
+                    queries.push(Query.search('cookTime', filters.cookTime.join(' ')));
+                }
+                if (filters.cuisine?.length) {
+                    queries.push(Query.search('cuisine', filters.cuisine.join(' ')));
+                }
+                if (filters.difficulty?.length) {
+                    queries.push(Query.search('difficulty', filters.difficulty.join(' ')));
+                }
+            }
+
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                queries
+            );
+
+            return response;
+        } catch (error) {
+            console.error('DatabaseService :: getAllRecipes :: error', error);
+            throw error;
+        }
     },
 
-    getRecipesByCuisine: async (cuisine: string, limit: number = 10, lastId: string | null = null) => {
-        return retryOperation(async () => {
-            try {
-                const queries = [
-                    Query.equal('cuisine', cuisine),
-                    Query.orderDesc('$createdAt'),
-                    Query.limit(limit)
-                ];
-
-                if (lastId) {
-                    queries.push(Query.cursorAfter(lastId));
-                }
-
-                return await databases.listDocuments(
-                    DATABASE_ID,
-                    COLLECTIONS.VIDEOS,
-                    queries
-                );
-            } catch (error) {
-                console.error('Error getting recipes by cuisine:', error);
-                throw error;
+    getRecipesByCuisine: async (cuisine: string, limit: number = 10, lastId?: string | null, filters?: RecipeFilters) => {
+        try {
+            const queries: any[] = [
+                Query.equal('cuisine', cuisine),
+                Query.orderDesc('createdAt'),
+                Query.limit(limit)
+            ];
+            
+            if (lastId) {
+                queries.push(Query.cursorAfter(lastId));
             }
-        });
+
+            // Add filter queries
+            if (filters) {
+                if (filters.dietary?.length) {
+                    queries.push(Query.search('dietary', filters.dietary.join(' ')));
+                }
+                if (filters.cookTime?.length) {
+                    queries.push(Query.search('cookTime', filters.cookTime.join(' ')));
+                }
+                if (filters.difficulty?.length) {
+                    queries.push(Query.search('difficulty', filters.difficulty.join(' ')));
+                }
+            }
+
+            const response = await databases.listDocuments(
+                DATABASE_ID,
+                COLLECTIONS.VIDEOS,
+                queries
+            );
+
+            return response;
+        } catch (error) {
+            console.error('DatabaseService :: getRecipesByCuisine :: error', error);
+            throw error;
+        }
     },
 
     // Search History Methods

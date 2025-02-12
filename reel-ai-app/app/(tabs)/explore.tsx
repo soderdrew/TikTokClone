@@ -20,6 +20,9 @@ import { DatabaseService, AuthService } from '../services/appwrite';
 import { Models } from 'react-native-appwrite';
 import { router } from 'expo-router';
 import { debounce } from 'lodash';
+import FilterButton from '../components/filters/FilterButton';
+import FilterModal from '../components/filters/FilterModal';
+import { filterCategories, FilterCategory, Filters } from '../components/filters/filterData';
 
 const { width, height } = Dimensions.get('window');
 const CATEGORY_WIDTH = width * 0.4;
@@ -36,6 +39,8 @@ interface Recipe extends Models.Document {
   likesCount: number;
   commentsCount: number;
   userId: string;
+  dietary?: string[];
+  cookTime?: string;
 }
 
 interface SearchHistoryItem extends Models.Document {
@@ -59,6 +64,15 @@ export default function ExploreScreen() {
   const lastHistoryId = React.useRef<string | null>(null);
   const lastRecipeId = React.useRef<string | null>(null);
 
+  // New state for filters
+  const [activeFilterId, setActiveFilterId] = React.useState<string | null>(null);
+  const [selectedFilters, setSelectedFilters] = React.useState<Filters>({
+    dietary: [],
+    cookTime: [],
+    cuisine: [],
+    difficulty: [],
+  });
+
   const searchOpacity = React.useRef(new Animated.Value(0)).current;
   const searchHistoryListRef = React.useRef<FlatList>(null);
 
@@ -76,8 +90,10 @@ export default function ExploreScreen() {
   }, []);
 
   React.useEffect(() => {
-    loadRecipes();
-  }, [selectedCategory]);
+    if (userId) {
+      loadRecipes();
+    }
+  }, [userId, selectedCategory, selectedFilters]);
 
   const loadUserAndData = async () => {
     try {
@@ -134,17 +150,26 @@ export default function ExploreScreen() {
       }
 
       let recipesData;
+      const filters = {
+        cuisine: selectedFilters.cuisine.length > 0 ? selectedFilters.cuisine : undefined,
+        difficulty: selectedFilters.difficulty.length > 0 ? selectedFilters.difficulty : undefined,
+        cookTime: selectedFilters.cookTime.length > 0 ? selectedFilters.cookTime : undefined,
+        dietary: selectedFilters.dietary.length > 0 ? selectedFilters.dietary : undefined,
+      };
+
       if (selectedCategory) {
         const category = categories.find(c => c.name === selectedCategory);
         recipesData = await DatabaseService.getRecipesByCuisine(
           category?.cuisine || '',
           10,
-          loadMore ? lastRecipeId.current : null
+          loadMore ? lastRecipeId.current : null,
+          filters
         );
       } else {
         recipesData = await DatabaseService.getAllRecipes(
           10,
-          loadMore ? lastRecipeId.current : null
+          loadMore ? lastRecipeId.current : null,
+          filters
         );
       }
 
@@ -159,7 +184,7 @@ export default function ExploreScreen() {
       }
 
       setRecipes(prev => 
-        loadMore ? [...prev, ...recipesData.documents] : recipesData.documents
+        loadMore ? [...prev, ...recipesData.documents as Recipe[]] : recipesData.documents as Recipe[]
       );
     } catch (error) {
       console.error('Error loading recipes:', error);
@@ -192,25 +217,24 @@ export default function ExploreScreen() {
   const handleSearchChange = (text: string) => {
     setSearchQuery(text);
     if (text.trim()) {
-      setShowSearchHistory(false);
       if (userId) {
         debouncedAddToHistory(text, userId);
       }
-    } else {
-      setShowSearchHistory(true);
     }
   };
 
   const handleSearchFocus = () => {
-    setShowSearchHistory(true);
-    if (searchHistoryListRef.current) {
-      searchHistoryListRef.current.scrollToOffset({ offset: 0, animated: false });
+    if (searchHistory.length > 0) {
+      setShowSearchHistory(true);
+      if (searchHistoryListRef.current) {
+        searchHistoryListRef.current.scrollToOffset({ offset: 0, animated: false });
+      }
+      Animated.timing(searchOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     }
-    Animated.timing(searchOpacity, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: true,
-    }).start();
   };
 
   const handleHistoryItemPress = async (query: string) => {
@@ -311,12 +335,24 @@ export default function ExploreScreen() {
     Keyboard.dismiss();
   };
 
+  const handleFilterPress = (filterId: string) => {
+    setActiveFilterId(activeFilterId === filterId ? null : filterId);
+  };
+
+  const handleFilterApply = (filterId: string, selectedItems: string[]) => {
+    setSelectedFilters(prev => ({
+      ...prev,
+      [filterId]: selectedItems,
+    }));
+    setActiveFilterId(null);
+  };
+
   return (
     <View style={styles.container}>
-      {/* Search Bar */}
       <View style={styles.mainContainer}>
+        {/* Search Bar */}
         <View style={styles.searchContainer}>
-          {showSearchHistory || searchQuery || selectedCategory ? (
+          {showSearchHistory || searchQuery ? (
             <TouchableOpacity 
               onPress={handleBackPress}
               style={styles.searchIcon}
@@ -341,15 +377,48 @@ export default function ExploreScreen() {
           ) : null}
         </View>
 
+        {/* Filter Buttons - Always show */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[
+            styles.filterContainer,
+            showSearchHistory && styles.hideFilters
+          ]}
+          contentContainerStyle={styles.filterContentContainer}
+        >
+          {filterCategories.map((category) => (
+            <FilterButton
+              key={category.id}
+              title={category.title}
+              icon={category.icon}
+              onPress={() => handleFilterPress(category.id)}
+              isActive={activeFilterId === category.id}
+              hasSelectedFilters={selectedFilters[category.id as keyof Filters].length > 0}
+            />
+          ))}
+        </ScrollView>
+
+        {/* Filter Modals */}
+        {filterCategories.map((category) => (
+          <FilterModal
+            key={category.id}
+            isVisible={activeFilterId === category.id}
+            onClose={() => setActiveFilterId(null)}
+            onApply={(selectedItems) => handleFilterApply(category.id, selectedItems)}
+            title={category.title}
+            items={category.items}
+            selectedItems={selectedFilters[category.id as keyof Filters]}
+          />
+        ))}
+
         {showSearchHistory && searchHistory.length > 0 ? (
           <>
-            {/* Backdrop */}
             <TouchableWithoutFeedback onPress={handleBackPress}>
               <View style={styles.backdrop} />
             </TouchableWithoutFeedback>
 
-            {/* Search History Container */}
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.searchHistoryContainer,
                 { opacity: searchOpacity }
@@ -401,46 +470,11 @@ export default function ExploreScreen() {
           </>
         ) : (
           <View style={styles.contentContainer}>
-            {/* Categories */}
-            {!searchQuery && (
-              <>
-                <Text style={styles.sectionTitle}>Categories</Text>
-                <View style={styles.categoriesWrapper}>
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.categoriesContainer}
-                    contentContainerStyle={styles.categoriesContent}
-                  >
-                    {categories.map((category) => (
-                      <TouchableOpacity
-                        key={category.id}
-                        style={[
-                          styles.categoryCard,
-                          selectedCategory === category.name && styles.selectedCategory
-                        ]}
-                        onPress={() => {
-                          setSelectedCategory(
-                            selectedCategory === category.name ? '' : category.name
-                          );
-                          setHasMoreRecipes(true);
-                          lastRecipeId.current = null;
-                        }}
-                      >
-                        <Ionicons name={category.icon as any} size={24} color="white" />
-                        <Text style={styles.categoryText}>{category.name}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </>
-            )}
-
             {/* Recipes Grid */}
             <Text style={styles.sectionTitle}>
-              {searchQuery ? 'Search Results' : selectedCategory ? `${selectedCategory} Recipes` : 'Popular Recipes'}
+              {searchQuery ? 'Search Results' : 'Popular Recipes'}
             </Text>
-            {isLoading && !recipes.length ? (
+            {isLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#ff4444" />
               </View>
@@ -449,7 +483,7 @@ export default function ExploreScreen() {
                 <Ionicons name="search-outline" size={50} color="#666" />
                 <Text style={styles.noResultsText}>No recipes found</Text>
                 <Text style={styles.noResultsSubtext}>
-                  Try adjusting your search or explore other categories
+                  Try adjusting your search or filters
                 </Text>
               </View>
             ) : (
@@ -457,14 +491,14 @@ export default function ExploreScreen() {
                 data={filteredRecipes}
                 numColumns={2}
                 renderItem={({ item }) => (
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.recipeCard}
                     onPress={() => navigateToRecipe(item.$id)}
                   >
                     <View style={styles.recipePlaceholder}>
                       {item.thumbnailUrl ? (
-                        <Image 
-                          source={{ uri: item.thumbnailUrl }} 
+                        <Image
+                          source={{ uri: item.thumbnailUrl }}
                           style={styles.recipeImage}
                         />
                       ) : (
@@ -529,6 +563,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     height: '100%',
   },
+  filterContainer: {
+    marginVertical: 8,
+    marginHorizontal: 15,
+    height: 36,
+  },
+  filterContentContainer: {
+    paddingRight: 5,
+    height: 36,
+  },
   searchHistoryContainer: {
     backgroundColor: '#1a1a1a',
     marginHorizontal: 15,
@@ -579,34 +622,6 @@ const styles = StyleSheet.create({
     marginLeft: 15,
     marginTop: 5,
     marginBottom: 8,
-  },
-  categoriesWrapper: {
-    height: 100,
-    marginBottom: 15,
-  },
-  categoriesContainer: {
-    paddingLeft: 15,
-  },
-  categoriesContent: {
-    paddingRight: 15,
-  },
-  categoryCard: {
-    backgroundColor: '#1a1a1a',
-    padding: 15,
-    borderRadius: 12,
-    marginRight: 10,
-    width: CATEGORY_WIDTH,
-    height: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedCategory: {
-    backgroundColor: '#ff4444',
-  },
-  categoryText: {
-    color: 'white',
-    marginTop: 8,
-    fontSize: 14,
   },
   recipeGrid: {
     padding: 8,
@@ -688,5 +703,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
+  },
+  hideFilters: {
+    display: 'none',
   },
 });
