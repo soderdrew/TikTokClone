@@ -12,6 +12,72 @@ const client = new Client()
 
 const functions = new Functions(client);
 
+// Unit conversion ratios (to base unit)
+type UnitConversions = {
+    VOLUME: { [key: string]: number };
+    WEIGHT: { [key: string]: number };
+};
+
+const UNIT_CONVERSIONS: UnitConversions = {
+    VOLUME: {
+        // Convert everything to milliliters (mL) as base unit
+        'ml': 1,
+        'l': 1000,
+        'liter': 1000,
+        'liters': 1000,
+        'cup': 236.588,
+        'cups': 236.588,
+        'tbsp': 14.787,
+        'tsp': 4.929,
+        'gal': 3785.41,
+        'gallon': 3785.41,
+        'gallons': 3785.41
+    },
+    WEIGHT: {
+        // Convert everything to grams (g) as base unit
+        'g': 1,
+        'gram': 1,
+        'grams': 1,
+        'kg': 1000,
+        'oz': 28.3495,
+        'lbs': 453.592,
+        'pound': 453.592,
+        'pounds': 453.592
+    }
+};
+
+// Helper function to get unit type
+const getUnitType = (unit: string): 'VOLUME' | 'WEIGHT' | 'COUNT' | null => {
+    unit = unit.toLowerCase();
+    const volumeUnits = new Set(['ml', 'l', 'cups', 'tbsp', 'tsp', 'gal', 'gallons', 'gallon', 'cup', 'liter', 'liters']);
+    const weightUnits = new Set(['g', 'kg', 'oz', 'lbs', 'pound', 'pounds', 'gram', 'grams']);
+    const countUnits = new Set(['pcs', 'pack', 'box', 'can', 'bottle', 'piece', 'pieces', 'slice', 'slices', 'unit', 'units', 'grain', 'grains']);
+
+    if (volumeUnits.has(unit)) return 'VOLUME';
+    if (weightUnits.has(unit)) return 'WEIGHT';
+    if (countUnits.has(unit)) return 'COUNT';
+    return null;
+};
+
+// Helper function to convert quantity between units
+const convertQuantity = (quantity: number, fromUnit: string, toUnit: string): number => {
+    fromUnit = fromUnit.toLowerCase();
+    toUnit = toUnit.toLowerCase();
+
+    // If units are the same, no conversion needed
+    if (fromUnit === toUnit) return quantity;
+
+    const unitType = getUnitType(fromUnit);
+    if (!unitType || unitType === 'COUNT') return quantity;
+
+    const conversions = UNIT_CONVERSIONS[unitType];
+    if (!conversions[fromUnit] || !conversions[toUnit]) return quantity;
+
+    // Convert to base unit, then to target unit
+    const baseValue = quantity * conversions[fromUnit];
+    return baseValue / conversions[toUnit];
+};
+
 // Helper function to normalize item names for comparison
 const normalizeItemName = (name: string): string => {
     return name.toLowerCase().trim();
@@ -19,9 +85,9 @@ const normalizeItemName = (name: string): string => {
 
 // Helper function to check if units are convertible
 const areUnitsConvertible = (unit1: string, unit2: string): boolean => {
-    const volumeUnits = new Set(['ml', 'l', 'cups', 'tbsp', 'tsp', 'gal', 'gallons', 'gallon']);
-    const weightUnits = new Set(['g', 'kg', 'oz', 'lbs', 'pound', 'pounds']);
-    const countUnits = new Set(['pcs', 'pack', 'box', 'can', 'bottle', 'piece', 'pieces', 'slice', 'slices']);
+    const volumeUnits = new Set(['ml', 'l', 'cups', 'tbsp', 'tsp', 'gal', 'gallons', 'gallon', 'cup', 'liter', 'liters']);
+    const weightUnits = new Set(['g', 'kg', 'oz', 'lbs', 'pound', 'pounds', 'gram', 'grams']);
+    const countUnits = new Set(['pcs', 'pack', 'box', 'can', 'bottle', 'piece', 'pieces', 'slice', 'slices', 'unit', 'units']);
 
     unit1 = unit1.toLowerCase();
     unit2 = unit2.toLowerCase();
@@ -54,16 +120,12 @@ export const combineInventoryItems = (existingItems: any[], newItems: any[]): {
             
             if (normalizedNewName === normalizedExistingName && 
                 areUnitsConvertible(newItem.unit, existingItem.unit)) {
-                // Found a match, combine quantities if units are the same
-                if (newItem.unit.toLowerCase() === existingItem.unit.toLowerCase()) {
-                    itemsToUpdate.push({
-                        ...existingItem,
-                        quantity: existingItem.quantity + newItem.quantity
-                    });
-                } else {
-                    // For now, keep them separate if units are different
-                    itemsToAdd.push(newItem);
-                }
+                // Found a match, convert units if necessary and combine
+                const convertedQuantity = convertQuantity(newItem.quantity, newItem.unit, existingItem.unit);
+                itemsToUpdate.push({
+                    ...existingItem,
+                    quantity: existingItem.quantity + convertedQuantity
+                });
                 found = true;
                 processedItems.add(normalizedNewName);
                 break;
@@ -88,32 +150,27 @@ export const combineInventoryItemsWithAI = async (existingItems: any[], newItems
     itemsToUpdate: any[]
 }> => {
     try {
-        // Prepare payload for AI processing
-        const payload = {
-            existingItems,
-            newItems
-        };
+        // Use programmatic combination
+        const combinedResults = combineInventoryItems(existingItems, newItems);
+        
+        // Clean the results
+        const cleanItemsToAdd = combinedResults.itemsToAdd.map(item => {
+            const { $id, $createdAt, $updatedAt, $permissions, $collectionId, $databaseId, ...rest } = item;
+            return rest;
+        });
 
-        // Call Appwrite Function for AI-powered item combination
-        const response = await functions.createExecution(
-            'combine_inventory_items', 
-            JSON.stringify(payload),
-            false, 
-            'application/json'
-        );
-
-        // Parse the result
-        const result = JSON.parse(response.responseBody);
+        const cleanItemsToUpdate = combinedResults.itemsToUpdate.map(item => {
+            const { $createdAt, $updatedAt, $permissions, $collectionId, $databaseId, ...rest } = item;
+            return rest;
+        });
 
         return {
-            itemsToAdd: result.itemsToAdd || [],
-            itemsToUpdate: result.itemsToUpdate || []
+            itemsToAdd: cleanItemsToAdd,
+            itemsToUpdate: cleanItemsToUpdate
         };
     } catch (error) {
-        console.error('Error combining items with AI:', error);
-        
-        // Fallback to programmatic combination if AI fails
-        return combineInventoryItems(existingItems, newItems);
+        console.error('Error combining items:', error);
+        throw error;
     }
 };
 

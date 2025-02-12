@@ -6,7 +6,7 @@ import InventoryGrid from '../components/inventory/InventoryGrid';
 import AddItemModal from '../components/modals/AddItemModal';
 import EditItemModal from '../components/modals/EditItemModal';
 import VoiceItemsModal from '../components/modals/VoiceItemsModal';
-import { getInventoryItems, deleteInventoryItem, updateInventoryItem, createInventoryItem } from '../services/inventoryService';
+import { getInventoryItems, deleteInventoryItem, updateInventoryItem, createInventoryItem, combineInventoryItemsWithAI } from '../services/inventoryService';
 
 const { width } = Dimensions.get('window');
 
@@ -157,121 +157,126 @@ export default function PantryScreen() {
   };
 
   const findMatchingItem = (newItem: any) => {
-    return kitchenItems.findIndex(existing => 
-      // Normalize names by converting to lowercase and trimming
-      existing.name.toLowerCase().trim() === newItem.name.toLowerCase().trim() &&
-      areUnitsConvertible(existing.unit, newItem.unit)
-    );
+    console.log('Checking for duplicates:', {
+      newItem,
+      existingItems: kitchenItems
+    });
+    const index = kitchenItems.findIndex(existing => {
+      const nameMatch = existing.name.toLowerCase().trim() === newItem.name.toLowerCase().trim();
+      const unitsMatch = areUnitsConvertible(existing.unit, newItem.unit);
+      console.log(`Comparing "${existing.name}" with "${newItem.name}":`, {
+        nameMatch,
+        unitsMatch,
+        existingUnit: existing.unit,
+        newUnit: newItem.unit
+      });
+      return nameMatch && unitsMatch;
+    });
+    console.log('Match found at index:', index);
+    return index;
   };
 
   const handleAddItems = async (items: any[]) => {
     try {
-      // Process each item sequentially
-      for (const item of items) {
-        // Use the same handleAddItem function to ensure consistent behavior
-        // but don't create the item in the database yet
-        const existingItemIndex = findMatchingItem(item);
+      // Get current inventory items once
+      const currentItems = await getInventoryItems();
+      
+      // Clean the new items first
+      const cleanNewItems = items.map(({ $id, $createdAt, $updatedAt, $permissions, $collectionId, $databaseId, ...rest }) => rest);
+      
+      // Find all duplicates first
+      const duplicates = cleanNewItems.filter(newItem => 
+        currentItems.some(existingItem => 
+          existingItem.name.toLowerCase().trim() === newItem.name.toLowerCase().trim() &&
+          areUnitsConvertible(existingItem.unit, newItem.unit)
+        )
+      );
 
-        if (existingItemIndex !== -1) {
-          const existingItem = kitchenItems[existingItemIndex];
-          
-          // If units are different, ask user to confirm combination
-          if (existingItem.unit.toLowerCase() !== item.unit.toLowerCase()) {
-            // Calculate converted quantity for display
-            const convertedQuantity = convertQuantity(
-              item.quantity,
-              item.unit,
-              existingItem.unit
-            );
-            
-            // Show alert and wait for user response
-            await new Promise((resolve) => {
-              Alert.alert(
-                "Different Units",
-                `There's already ${existingItem.name} with ${formatQuantity(existingItem.quantity)} ${existingItem.unit}. ` +
-                `Adding ${formatQuantity(item.quantity)} ${item.unit} (≈ ${formatQuantity(convertedQuantity)} ${existingItem.unit}). ` +
-                `Would you like to keep this as a separate entry?`,
-                [
-                  {
-                    text: "Keep Separate",
-                    style: "cancel",
-                    onPress: async () => {
-                      try {
-                        const newItemDoc = await createInventoryItem(item);
-                        setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
-                        resolve(null);
-                      } catch (error) {
-                        console.error('Error creating separate item:', error);
-                        Alert.alert('Error', 'Failed to add item. Please try again.');
-                        resolve(null);
+      if (duplicates.length > 0) {
+        // Show a single prompt for all duplicates
+        await new Promise((resolve) => {
+          const duplicateNames = duplicates.map(d => d.name).join(', ');
+          Alert.alert(
+            "Duplicate Items Found",
+            `Found existing items: ${duplicateNames}. Would you like to combine them with your existing inventory?`,
+            [
+              {
+                text: "Keep Separate",
+                style: "cancel",
+                onPress: async () => {
+                  try {
+                    // Add all items as new
+                    for (const item of cleanNewItems) {
+                      const newItemDoc = await createInventoryItem(item);
+                      setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
+                    }
+                    resolve(null);
+                  } catch (error) {
+                    console.error('Error creating separate items:', error);
+                    Alert.alert('Error', 'Failed to add items. Please try again.');
+                    resolve(null);
+                  }
+                }
+              },
+              {
+                text: "Combine All",
+                style: "default",
+                onPress: async () => {
+                  try {
+                    // Clean existing items before sending to AI
+                    const cleanExistingItems = currentItems.map(({ $id, $createdAt, $updatedAt, $permissions, $collectionId, $databaseId, ...rest }) => ({
+                      ...rest,
+                      originalId: $id // Keep track of original ID for updates
+                    })) as Array<{ name: string; quantity: number; unit: string; icon?: string; originalId: string }>;
+
+                    // Use AI to combine all items at once
+                    const { itemsToAdd, itemsToUpdate } = await combineInventoryItemsWithAI(
+                      cleanExistingItems,
+                      cleanNewItems
+                    );
+
+                    // Process updates first
+                    for (const updatedItem of itemsToUpdate) {
+                      const existingItem = cleanExistingItems.find(item => 
+                        item.name.toLowerCase().trim() === updatedItem.name.toLowerCase().trim()
+                      );
+                      if (existingItem && existingItem.originalId) {
+                        const { originalId, ...cleanUpdatedItem } = updatedItem;
+                        await updateInventoryItem(existingItem.originalId, cleanUpdatedItem);
+                        setKitchenItems(prev => 
+                          prev.map(item => 
+                            item.$id === existingItem.originalId ? 
+                              { ...cleanUpdatedItem, $id: existingItem.originalId } : 
+                              item
+                          )
+                        );
                       }
                     }
-                  },
-                  {
-                    text: "Convert & Combine",
-                    style: "default",
-                    onPress: async () => {
-                      const updatedItem = {
-                        ...existingItem,
-                        quantity: existingItem.quantity + convertedQuantity
-                      };
-                      await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
-                      setKitchenItems(prev => 
-                        prev.map((prevItem, index) => 
-                          index === existingItemIndex ? updatedItem : prevItem
-                        )
-                      );
-                      resolve(null);
+
+                    // Then add new items
+                    for (const newItem of itemsToAdd) {
+                      const newItemDoc = await createInventoryItem(newItem);
+                      setKitchenItems(prev => [...prev, { ...newItem, $id: newItemDoc.$id }]);
                     }
+                    resolve(null);
+                  } catch (error) {
+                    console.error('Error combining items:', error);
+                    Alert.alert('Error', 'Failed to combine items. Adding them separately.');
+                    // Fallback: add all items as new
+                    for (const item of cleanNewItems) {
+                      const newItemDoc = await createInventoryItem(item);
+                      setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
+                    }
+                    resolve(null);
                   }
-                ]
-              );
-            });
-          } else {
-            // Same units, ask to combine
-            await new Promise((resolve) => {
-              Alert.alert(
-                "Combine Items",
-                `There's already ${existingItem.name} with ${formatQuantity(existingItem.quantity)} ${existingItem.unit}. Would you like to combine with your new quantity of ${formatQuantity(item.quantity)} ${item.unit}?`,
-                [
-                  {
-                    text: "Keep Separate",
-                    style: "cancel",
-                    onPress: async () => {
-                      try {
-                        const newItemDoc = await createInventoryItem(item);
-                        setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
-                        resolve(null);
-                      } catch (error) {
-                        console.error('Error creating separate item:', error);
-                        Alert.alert('Error', 'Failed to add item. Please try again.');
-                        resolve(null);
-                      }
-                    }
-                  },
-                  {
-                    text: "Combine",
-                    style: "default",
-                    onPress: async () => {
-                      const updatedItem = {
-                        ...existingItem,
-                        quantity: existingItem.quantity + item.quantity
-                      };
-                      await updateInventoryItem(existingItem.$id, cleanItemForUpdate(updatedItem));
-                      setKitchenItems(prev => 
-                        prev.map((prevItem, index) => 
-                          index === existingItemIndex ? updatedItem : prevItem
-                        )
-                      );
-                      resolve(null);
-                    }
-                  }
-                ]
-              );
-            });
-          }
-        } else {
-          // No existing item, create new one
+                }
+              }
+            ]
+          );
+        });
+      } else {
+        // No duplicates, add all items as new
+        for (const item of cleanNewItems) {
           const newItemDoc = await createInventoryItem(item);
           setKitchenItems(prev => [...prev, { ...item, $id: newItemDoc.$id }]);
         }

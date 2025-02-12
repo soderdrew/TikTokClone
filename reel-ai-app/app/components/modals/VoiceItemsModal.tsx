@@ -30,7 +30,7 @@ interface TranscribedItem {
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onAddItems: (items: TranscribedItem[]) => void;
+  onAddItems: (items: TranscribedItem[], isUpdate?: boolean) => void;
   onBack: () => void;
 }
 
@@ -245,22 +245,8 @@ export default function VoiceItemsModal({ visible, onClose, onAddItems, onBack }
         icon: item.icon || getFoodIcon(item.name.toLowerCase())
       }));
 
-      // Get current inventory items
-      const existingItems = await getInventoryItems();
-      
-      // Use the AI-powered combination logic
-      const { itemsToAdd, itemsToUpdate } = await combineInventoryItemsWithAI(existingItems, cleanItems);
-
-      // Process updates first
-      for (const item of itemsToUpdate) {
-        await onAddItems([item]);
-      }
-
-      // Then process new items
-      for (const item of itemsToAdd) {
-        await onAddItems([item]);
-      }
-      
+      // Pass all items to parent handler
+      await onAddItems(cleanItems);
       onClose();
     } catch (error) {
       console.error('Error adding items:', error);
