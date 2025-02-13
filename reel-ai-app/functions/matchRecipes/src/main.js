@@ -13,16 +13,31 @@ module.exports = async function (context) {
             throw new Error('OpenAI API key is not configured');
         }
 
-        const payload = JSON.parse(req.payload || '{}');
-        const ingredients = payload.ingredients || [];
-        const recipes = payload.recipes || [];
+        // Log the raw payload first
+        log(JSON.stringify({ message: 'Raw payload received', payload: req.payload }));
 
+        let payload;
+        try {
+            payload = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload;
+            log(JSON.stringify({ message: 'Parsed payload', payload }));
+        } catch (parseError) {
+            error(JSON.stringify({ message: 'Failed to parse payload', error: parseError.message }));
+            throw new Error('Invalid payload format');
+        }
+
+        const ingredients = payload?.ingredients || [];
+        const recipes = payload?.recipes || [];
+
+        // Log the extracted data
         log(JSON.stringify({
-            message: 'Input received',
+            message: 'Extracted data',
             ingredientCount: ingredients.length,
             recipeCount: recipes.length,
             ingredients,
-            recipes
+            recipes: recipes.map(r => ({ 
+                title: r.title,
+                ingredientCount: r.ingredients?.length || 0
+            }))
         }));
 
         // Early return if no recipes or ingredients
@@ -42,6 +57,14 @@ module.exports = async function (context) {
                 'water', 'salt', 'pepper', 'oil', 'butter', 
                 'flour', 'sugar', 'garlic', 'onion'
             ]);
+
+            // Log the ingredients we're matching against
+            log(JSON.stringify({
+                message: 'Matching recipe',
+                title: recipe.title,
+                recipeIngredients: recipe.ingredients,
+                availableIngredients: Array.from(availableIngredients)
+            }));
 
             const recipeIngredients = recipe.ingredients.map(i => i.toLowerCase());
             const matchedIngredients = recipeIngredients.filter(ingredient => 
