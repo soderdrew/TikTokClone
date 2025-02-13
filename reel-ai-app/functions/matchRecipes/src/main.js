@@ -43,21 +43,53 @@ module.exports = async function (context) {
             });
         }
 
+        // Helper function to clean ingredient strings
+        const cleanIngredient = (ingredient) => {
+            // Remove quotes and leading/trailing spaces
+            let cleaned = ingredient.replace(/^["']|["']$/g, '').trim().toLowerCase();
+            
+            // Remove measurements (e.g., "2 cups", "1/2 tsp")
+            cleaned = cleaned.replace(/^[\d./]+ ?(cup|tsp|tbsp|teaspoon|tablespoon|pound|lb|oz|ounce|g|gram|ml|liter|l|piece|pieces|slice|slices|large|medium|small)s? ?/i, '');
+            
+            // Remove common prefixes and suffixes
+            cleaned = cleaned.replace(/(chopped|minced|diced|sliced|ground|grated|softened|melted|fresh|dried|optional|for serving|for garnish|to taste)/g, '');
+            
+            // Remove parenthetical notes
+            cleaned = cleaned.replace(/\([^)]*\)/g, '');
+            
+            // Remove section headers
+            cleaned = cleaned.replace(/^(for|the|optional) .*:/i, '');
+            
+            // Final cleanup
+            cleaned = cleaned.replace(/[,.].*$/, '') // Remove everything after comma or period
+                           .replace(/\s+/g, ' ')     // Normalize spaces
+                           .trim();                  // Final trim
+            
+            log(`Cleaned ingredient: "${ingredient}" -> "${cleaned}"`);
+            return cleaned;
+        };
+
         // Calculate matches with enhanced logging
         log('Starting recipe matching algorithm...');
         const matches = recipes.map(recipe => {
             log(`Processing recipe: ${recipe.title}`);
             
+            // const availableIngredients = new Set([
+            //     ...ingredients.map(i => cleanIngredient(i)),
+            //     'water', 'salt', 'pepper', 'oil', 'butter', 
+            //     'flour', 'sugar', 'garlic', 'onion'
+            // ]);
+
             const availableIngredients = new Set([
-                ...ingredients.map(i => i.toLowerCase()),
-                'water', 'salt', 'pepper', 'oil', 'butter', 
-                'flour', 'sugar', 'garlic', 'onion'
+                ...ingredients.map(i => cleanIngredient(i)),
+                'water'
             ]);
 
             log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);
             
             const recipeIngredients = Array.isArray(recipe.ingredients) 
-                ? recipe.ingredients.map(i => i.toLowerCase())
+                ? recipe.ingredients.map(i => cleanIngredient(i))
+                    .filter(i => i && i.length > 0) // Remove empty strings
                 : [];
                 
             log(`Recipe ingredients for ${recipe.title}: ${JSON.stringify(recipeIngredients)}`);
@@ -75,11 +107,15 @@ module.exports = async function (context) {
                 : 0;
 
             log(`Match results for ${recipe.title}: ${matchPercentage}% match`);
+            log(`Matched ingredients: ${JSON.stringify(matchedIngredients)}`);
+            log(`Missing ingredients: ${JSON.stringify(missingIngredients)}`);
 
             return {
                 title: recipe.title,
                 matchPercentage,
-                missingIngredients: missingIngredients.slice(0, 3)
+                missingIngredients: recipe.ingredients
+                    .filter(i => missingIngredients.includes(cleanIngredient(i)))
+                    .slice(0, 3)
             };
         });
 
