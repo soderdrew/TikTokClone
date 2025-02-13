@@ -47,11 +47,12 @@ module.exports = async function (context) {
         const cleanIngredient = (ingredient) => {
             if (!ingredient || typeof ingredient !== 'string') return '';
 
-            // Remove extra quotes and backslashes
-            let cleaned = ingredient.replace(/\\"|\\'/g, '')  // Remove escaped quotes
-                                  .replace(/^["']|["']$/g, '') // Remove surrounding quotes
-                                  .trim()
-                                  .toLowerCase();
+            // Remove escaped quotes and clean up the string
+            let cleaned = ingredient
+                .replace(/\\"/g, '"')  // Convert escaped quotes to regular quotes
+                .replace(/^"|"$/g, '') // Remove surrounding quotes
+                .trim()
+                .toLowerCase();
 
             // Skip section headers and empty strings
             if (cleaned.includes(':') || cleaned.length === 0) return '';
@@ -67,7 +68,7 @@ module.exports = async function (context) {
                 'large', 'medium', 'small', 'fresh', 'dried', 'ground', 'chopped',
                 'minced', 'diced', 'sliced', 'grated', 'shredded', 'softened',
                 'melted', 'room temperature', 'cold', 'warm', 'hot', 'frozen',
-                'canned', 'whole', 'all-purpose', 'purpose'
+                'canned', 'whole', 'all-purpose', 'purpose', 'optional'
             ];
             const descriptorPattern = new RegExp(`\\b(${descriptors.join('|')})\\b`, 'gi');
             cleaned = cleaned.replace(descriptorPattern, '');
@@ -118,9 +119,11 @@ module.exports = async function (context) {
             log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);
             
             // Handle recipe ingredients that might be an array of strings or a single string
-            const recipeIngredients = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [recipe.ingredients])
-                .map(i => cleanIngredient(i))
-                .filter(i => i && i.length > 0 && !i.includes(':')); // Remove empty strings and headers
+            const recipeIngredients = Array.isArray(recipe.ingredients) 
+                ? recipe.ingredients
+                    .map(i => cleanIngredient(i))
+                    .filter(i => i && i.length > 0 && !i.includes(':'))
+                : [];
                 
             log(`Recipe ingredients for ${recipe.title}: ${JSON.stringify(recipeIngredients)}`);
 
@@ -136,25 +139,34 @@ module.exports = async function (context) {
                 )
             );
 
-            const matchPercentage = recipeIngredients.length > 0
-                ? Math.round((matchedIngredients.length / recipeIngredients.length) * 100)
+            // Calculate match percentage based on actual ingredients (excluding headers and empty strings)
+            const totalIngredients = recipeIngredients.length;
+            const matchPercentage = totalIngredients > 0
+                ? Math.round((matchedIngredients.length / totalIngredients) * 100)
                 : 0;
 
-            log(`Match results for ${recipe.title}: ${matchPercentage}% match`);
+            log(`Match results for ${recipe.title}:`);
+            log(`Total ingredients: ${totalIngredients}`);
+            log(`Matched ingredients: ${matchedIngredients.length}`);
+            log(`Match percentage: ${matchPercentage}%`);
             log(`Matched ingredients: ${JSON.stringify(matchedIngredients)}`);
             log(`Missing ingredients: ${JSON.stringify(missingIngredients)}`);
+
+            // Find the original ingredients that correspond to the missing cleaned ingredients
+            const originalMissingIngredients = recipe.ingredients
+                .filter(i => missingIngredients.includes(cleanIngredient(i)))
+                .slice(0, 3);
 
             return {
                 title: recipe.title,
                 matchPercentage,
-                missingIngredients: recipe.ingredients
-                    .filter(i => missingIngredients.includes(cleanIngredient(i)))
-                    .slice(0, 3)
+                missingIngredients: originalMissingIngredients
             };
         });
 
-        // Sort and select top matches
+        // Sort and select top matches with at least 30% match
         const topMatches = matches
+            .filter(match => match.matchPercentage >= 30)
             .sort((a, b) => b.matchPercentage - a.matchPercentage)
             .slice(0, 3);
 
