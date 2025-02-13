@@ -6,6 +6,7 @@ import InventoryGrid from '../components/inventory/InventoryGrid';
 import AddItemModal from '../components/modals/AddItemModal';
 import EditItemModal from '../components/modals/EditItemModal';
 import VoiceItemsModal from '../components/modals/VoiceItemsModal';
+import RecipeMatchesModal from '../components/modals/RecipeMatchesModal';
 import { getInventoryItems, deleteInventoryItem, updateInventoryItem, createInventoryItem, combineInventoryItemsWithAI } from '../services/inventoryService';
 import { DatabaseService } from '../services/appwrite';
 
@@ -138,6 +139,13 @@ export default function PantryScreen() {
   const [kitchenItems, setKitchenItems] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showRecipeMatches, setShowRecipeMatches] = useState(false);
+  const [recipeMatches, setRecipeMatches] = useState<Array<{
+    title: string;
+    matchPercentage: number;
+    missingIngredients: string[];
+  }>>([]);
+  const [isMatchingRecipes, setIsMatchingRecipes] = useState(false);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -407,7 +415,8 @@ export default function PantryScreen() {
 
   const handleFindRecipes = async () => {
     try {
-      setIsLoading(true);
+      setIsMatchingRecipes(true);
+      setShowRecipeMatches(true);
       
       // Get ingredient names from inventory
       const ingredients = kitchenItems.map(item => item.name.toLowerCase().trim());
@@ -418,17 +427,13 @@ export default function PantryScreen() {
       
       // Call the matchRecipes cloud function
       const response = await DatabaseService.matchRecipes(ingredients, recipeTitles);
-      
-      // Navigate to explore screen with matched recipes
-      router.push({
-        pathname: '/(tabs)/explore',
-        params: { matchedRecipes: JSON.stringify(response.recipes) }
-      });
+      setRecipeMatches(response.matches || []);
     } catch (error) {
       console.error('Error finding recipes:', error);
       Alert.alert('Error', 'Failed to find matching recipes. Please try again.');
+      setRecipeMatches([]);
     } finally {
-      setIsLoading(false);
+      setIsMatchingRecipes(false);
     }
   };
 
@@ -536,7 +541,7 @@ export default function PantryScreen() {
           <TouchableOpacity 
             style={styles.findRecipesButton}
             onPress={handleFindRecipes}
-            disabled={isLoading || kitchenItems.length === 0}
+            disabled={isMatchingRecipes || kitchenItems.length === 0}
           >
             <Ionicons name="restaurant" size={24} color="white" />
             <Text style={styles.findRecipesText}>Find Recipes</Text>
@@ -571,6 +576,13 @@ export default function PantryScreen() {
             item={selectedItem}
           />
         )}
+
+        <RecipeMatchesModal
+          visible={showRecipeMatches}
+          onClose={() => setShowRecipeMatches(false)}
+          matches={recipeMatches}
+          isLoading={isMatchingRecipes}
+        />
       </View>
     </View>
   );

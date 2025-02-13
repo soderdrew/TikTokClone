@@ -12,18 +12,38 @@ module.exports = async function (req, res) {
 
     And here's a list of recipe titles available: ${recipes.join(", ")}.
 
-    Which recipes can I make with my current ingredients? Return only the titles of these recipes.
-    If no recipes can be made return an empty array. Do not respond in conversational format.`;
+    Analyze which recipes I can make with my current ingredients. Return the top 3 recipes as a JSON array with the following format:
+    [
+      {
+        "title": "Recipe Title",
+        "matchPercentage": 85,  // percentage of required ingredients I have
+        "missingIngredients": ["ingredient1", "ingredient2"]  // key ingredients I'm missing
+      }
+    ]
+    
+    Only include recipes where I have at least 60% of the ingredients. If no recipes meet this criteria, return an empty array.
+    Format the response as valid JSON only, no additional text.`;
+
     try {
         const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [{ role: "user", content: prompt }],
         });
-        console.log(completion)
-        const recipeList = completion.choices[0].message.content;
-        res.json({ recipes: recipeList ? JSON.parse(recipeList) : [] });
+        
+        let matches = [];
+        try {
+            matches = JSON.parse(completion.choices[0].message.content);
+            if (!Array.isArray(matches)) {
+                matches = [];
+            }
+        } catch (parseError) {
+            console.error('Error parsing OpenAI response:', parseError);
+            matches = [];
+        }
+        
+        res.json({ matches });
     } catch (e) {
-        console.log(e)
-        res.json({ recipes: [] });
+        console.error('Error calling OpenAI:', e);
+        res.json({ matches: [] });
     }
 }
