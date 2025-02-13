@@ -6,13 +6,20 @@ module.exports = async function (req, res) {
     });
 
     const { ingredients, recipes } = JSON.parse(req.payload);
+    
+    console.log('Matching recipes with ingredients:', {
+        ingredientCount: ingredients.length,
+        recipeCount: recipes.length,
+        ingredients,
+        recipes
+    });
 
     const prompt = `
     I have the following ingredients: ${ingredients.join(", ")}.
 
     And here's a list of recipe titles available: ${recipes.join(", ")}.
 
-    Analyze which recipes I can make with my current ingredients. Return the top 3 recipes as a JSON array with the following format:
+    Analyze which recipes I can make with my current ingredients. Always return exactly 3 recipes as a JSON array, selecting the best matches based on available ingredients. Use this format:
     [
       {
         "title": "Recipe Title",
@@ -21,26 +28,40 @@ module.exports = async function (req, res) {
       }
     ]
     
-    Only include recipes where I have at least 60% of the ingredients. If no recipes meet this criteria, return an empty array.
+    Important:
+    1. Always return exactly 3 recipes, even if the match percentages are low
+    2. Sort by highest match percentage first
+    3. For recipes with similar titles, assume similar core ingredients
+    4. Consider common pantry staples (salt, pepper, water) as available
     Format the response as valid JSON only, no additional text.`;
 
     try {
+        console.log('Sending request to OpenAI...');
         const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-4",
             messages: [{ role: "user", content: prompt }],
         });
         
+        console.log('Received response from OpenAI');
+        
         let matches = [];
         try {
-            matches = JSON.parse(completion.choices[0].message.content);
+            const content = completion.choices[0].message.content;
+            console.log('OpenAI response content:', content);
+            
+            matches = JSON.parse(content);
             if (!Array.isArray(matches)) {
+                console.error('Parsed response is not an array:', matches);
                 matches = [];
+            } else {
+                console.log('Successfully parsed matches:', matches);
             }
         } catch (parseError) {
             console.error('Error parsing OpenAI response:', parseError);
             matches = [];
         }
         
+        console.log('Returning matches:', { matchCount: matches.length, matches });
         res.json({ matches });
     } catch (e) {
         console.error('Error calling OpenAI:', e);
