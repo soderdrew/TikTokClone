@@ -45,28 +45,63 @@ module.exports = async function (context) {
 
         // Helper function to clean ingredient strings
         const cleanIngredient = (ingredient) => {
-            // Remove quotes and leading/trailing spaces
-            let cleaned = ingredient.replace(/^["']|["']$/g, '').trim().toLowerCase();
+            if (!ingredient || typeof ingredient !== 'string') return '';
+
+            // Remove extra quotes and backslashes
+            let cleaned = ingredient.replace(/\\"|\\'/g, '')  // Remove escaped quotes
+                                  .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+                                  .trim()
+                                  .toLowerCase();
+
+            // Skip section headers and empty strings
+            if (cleaned.includes(':') || cleaned.length === 0) return '';
+
+            // Remove measurements with units
+            cleaned = cleaned.replace(/^[\d\s./]+(cup|tsp|tbsp|teaspoon|tablespoon|pound|lb|oz|ounce|g|gram|ml|liter|l)s?\b/i, '');
             
-            // Remove measurements (e.g., "2 cups", "1/2 tsp")
-            cleaned = cleaned.replace(/^[\d./]+ ?(cup|tsp|tbsp|teaspoon|tablespoon|pound|lb|oz|ounce|g|gram|ml|liter|l|piece|pieces|slice|slices|large|medium|small)s? ?/i, '');
-            
-            // Remove common prefixes and suffixes
-            cleaned = cleaned.replace(/(chopped|minced|diced|sliced|ground|grated|softened|melted|fresh|dried|optional|for serving|for garnish|to taste)/g, '');
-            
+            // Remove numeric quantities at start
+            cleaned = cleaned.replace(/^[\d\s./]+/, '');
+
+            // Remove common descriptors and states
+            const descriptors = [
+                'large', 'medium', 'small', 'fresh', 'dried', 'ground', 'chopped',
+                'minced', 'diced', 'sliced', 'grated', 'shredded', 'softened',
+                'melted', 'room temperature', 'cold', 'warm', 'hot', 'frozen',
+                'canned', 'whole', 'all-purpose', 'purpose'
+            ];
+            const descriptorPattern = new RegExp(`\\b(${descriptors.join('|')})\\b`, 'gi');
+            cleaned = cleaned.replace(descriptorPattern, '');
+
             // Remove parenthetical notes
             cleaned = cleaned.replace(/\([^)]*\)/g, '');
-            
-            // Remove section headers
-            cleaned = cleaned.replace(/^(for|the|optional) .*:/i, '');
-            
+
+            // Remove everything after common separators
+            cleaned = cleaned.split(/[,.]|\bor\b|\bfor\b/)[0];
+
             // Final cleanup
-            cleaned = cleaned.replace(/[,.].*$/, '') // Remove everything after comma or period
-                           .replace(/\s+/g, ' ')     // Normalize spaces
-                           .trim();                  // Final trim
-            
+            cleaned = cleaned.replace(/\s+/g, ' ') // Normalize spaces
+                           .trim();
+
+            // Special cases
+            if (cleaned.includes('egg')) cleaned = 'eggs';
+            if (cleaned.includes('bread crumb')) cleaned = 'breadcrumbs';
+
             log(`Cleaned ingredient: "${ingredient}" -> "${cleaned}"`);
             return cleaned;
+        };
+
+        // Helper function to check if two ingredients match using word-by-word comparison
+        const ingredientsMatch = (recipeIngredient, availableIngredient) => {
+            const recipeWords = recipeIngredient.split(/\s+/).filter(word => word.length > 2);
+            const availableWords = availableIngredient.split(/\s+/);
+            
+            return recipeWords.some(recipeWord => 
+                availableWords.some(availableWord => 
+                    availableWord === recipeWord || 
+                    (availableWord.endsWith('s') && availableWord.slice(0, -1) === recipeWord) ||
+                    (recipeWord.endsWith('s') && recipeWord.slice(0, -1) === availableWord)
+                )
+            );
         };
 
         // Calculate matches with enhanced logging
@@ -74,32 +109,31 @@ module.exports = async function (context) {
         const matches = recipes.map(recipe => {
             log(`Processing recipe: ${recipe.title}`);
             
-            // const availableIngredients = new Set([
-            //     ...ingredients.map(i => cleanIngredient(i)),
-            //     'water', 'salt', 'pepper', 'oil', 'butter', 
-            //     'flour', 'sugar', 'garlic', 'onion'
-            // ]);
-
             const availableIngredients = new Set([
                 ...ingredients.map(i => cleanIngredient(i)),
-                'water'
+                'water', 'salt', 'pepper', 'oil', 'butter', 
+                'flour', 'sugar', 'garlic', 'onion'
             ]);
 
             log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);
             
-            const recipeIngredients = Array.isArray(recipe.ingredients) 
-                ? recipe.ingredients.map(i => cleanIngredient(i))
-                    .filter(i => i && i.length > 0) // Remove empty strings
-                : [];
+            // Handle recipe ingredients that might be an array of strings or a single string
+            const recipeIngredients = (Array.isArray(recipe.ingredients) ? recipe.ingredients : [recipe.ingredients])
+                .map(i => cleanIngredient(i))
+                .filter(i => i && i.length > 0 && !i.includes(':')); // Remove empty strings and headers
                 
             log(`Recipe ingredients for ${recipe.title}: ${JSON.stringify(recipeIngredients)}`);
 
-            const matchedIngredients = recipeIngredients.filter(ingredient => 
-                availableIngredients.has(ingredient)
+            const matchedIngredients = recipeIngredients.filter(recipeIngredient => 
+                Array.from(availableIngredients).some(availableIngredient => 
+                    ingredientsMatch(recipeIngredient, availableIngredient)
+                )
             );
 
-            const missingIngredients = recipeIngredients.filter(ingredient => 
-                !availableIngredients.has(ingredient)
+            const missingIngredients = recipeIngredients.filter(recipeIngredient => 
+                !Array.from(availableIngredients).some(availableIngredient => 
+                    ingredientsMatch(recipeIngredient, availableIngredient)
+                )
             );
 
             const matchPercentage = recipeIngredients.length > 0
