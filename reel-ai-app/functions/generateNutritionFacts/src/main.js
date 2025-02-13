@@ -65,6 +65,8 @@ export default async ({ req, res, log, error }) => {
         const instructions = Array.isArray(video.instructions) ? video.instructions.join('\n') : video.instructions;
 
         log('Processing recipe with ingredients and instructions');
+        log('Ingredients:', ingredients);
+        log('Instructions:', instructions);
 
         // OpenAI Prompt
         const prompt = `Provide the nutrition facts for the following recipe, assuming standard serving size: \nIngredients:\n${ingredients}\n\nInstructions:\n${instructions}\n\nFormat the output as a JSON object with the following keys (include the units for each nutritional value): calories, totalFat, saturatedFat, cholesterol, sodium, carbohydrates, fiber, sugar, protein, and servingSize. If you do not know the units, leave the value as "".`;
@@ -79,6 +81,7 @@ export default async ({ req, res, log, error }) => {
                 response_format: { type: "json_object" }
             });
             log('Successfully received OpenAI response');
+            log('Raw OpenAI response:', JSON.stringify(completion.choices[0].message.content));
         } catch (e) {
             error(`OpenAI error: ${e.message}`);
             return res.json({ 
@@ -92,8 +95,9 @@ export default async ({ req, res, log, error }) => {
         let nutritionFacts;
         try {
             log('Parsing OpenAI response');
-            nutritionFacts = JSON.parse(completion.choices[0].message.content);
-            log('Successfully parsed nutrition facts');
+            const rawContent = completion.choices[0].message.content;
+            nutritionFacts = JSON.parse(rawContent);
+            log('Parsed nutrition facts:', JSON.stringify(nutritionFacts));
 
             // Basic validation - check if all required fields are present
             const requiredFields = ['calories', 'totalFat', 'saturatedFat', 'cholesterol', 'sodium', 'carbohydrates', 'fiber', 'sugar', 'protein', 'servingSize'];
@@ -101,14 +105,17 @@ export default async ({ req, res, log, error }) => {
             
             if (missingFields.length > 0) {
                 error("Incomplete nutrition data from OpenAI. Missing fields:", missingFields);
+                error("Received nutrition facts:", JSON.stringify(nutritionFacts));
                 return res.json({ 
                     success: false, 
                     message: `Incomplete nutrition data received. Missing fields: ${missingFields.join(', ')}`,
-                    partialData: nutritionFacts
+                    partialData: nutritionFacts,
+                    rawResponse: rawContent
                 }, 500);
             }
         } catch (e) {
             error(`Error parsing OpenAI response: ${e.message}`);
+            error('Raw response content:', completion.choices[0].message.content);
             return res.json({ 
                 success: false, 
                 message: 'Failed to parse nutrition facts from OpenAI response', 
