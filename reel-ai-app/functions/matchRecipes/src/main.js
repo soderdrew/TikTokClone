@@ -44,51 +44,44 @@ module.exports = async function (context) {
         }
 
         // Helper function to clean ingredient strings
-        const cleanIngredient = (ingredient) => {
-            if (!ingredient || typeof ingredient !== 'string') return '';
+        const parseIngredient = (ingredient) => {
+            if (!ingredient || typeof ingredient !== 'string') return null;
 
             // Remove escaped quotes and clean up the string
             let cleaned = ingredient
                 .replace(/\\"/g, '"')  // Convert escaped quotes to regular quotes
                 .replace(/^"|"$/g, '') // Remove surrounding quotes
-                .trim()
-                .toLowerCase();
+                .trim();
 
-            // Skip section headers and empty strings
-            if (cleaned.includes(':') || cleaned.length === 0) return '';
-
-            // Parse ingredient to extract quantity, unit, and name (similar to RecipeModal)
+            // Remove any leading bullet points or dashes (exactly like RecipeModal)
+            cleaned = cleaned.replace(/^[-•]\s*/, '');
+            
+            // Match quantity, unit, and item name (exactly like RecipeModal)
             const match = cleaned.match(/^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*([a-zA-Z]+)?\s*(.*)/);
             
-            if (match) {
-                // Extract just the ingredient name, ignoring quantity and unit
-                cleaned = match[3];
-            }
-
-            // Remove parenthetical notes
-            cleaned = cleaned.replace(/\([^)]*\)/g, '');
-
-            // Split at common separators and take first part
-            cleaned = cleaned.split(/[,.]|\bor\b|\bfor\b/)[0];
-
-            // Final cleanup
-            cleaned = cleaned.replace(/\s+/g, ' ').trim();
-
-            log(`Cleaned ingredient: "${ingredient}" -> "${cleaned}"`);
-            return cleaned;
+            if (!match) return null;
+            
+            const [_, quantity, unit, itemName] = match;
+            return {
+                quantity: quantity ? eval(quantity.replace(' ', '+')) : 0, // Safely evaluate fractions
+                unit: unit?.toLowerCase() || 'units',
+                itemName: itemName.toLowerCase().trim()
+            };
         };
 
-        // Helper function to check if ingredients match using word-by-word comparison
-        // This is the same logic as RecipeModal
+        // Helper function to check if ingredients match (exactly like RecipeModal)
         const ingredientsMatch = (recipeIngredient, availableIngredient) => {
-            const recipeWords = recipeIngredient.split(/\s+/).filter(word => word.length > 2);
-            const availableWords = availableIngredient.split(/\s+/);
+            const parsed = parseIngredient(recipeIngredient);
+            if (!parsed) return false;
+
+            const ingredientWords = parsed.itemName.split(/\s+/).filter(word => word.length > 2);
+            const availableWords = availableIngredient.toLowerCase().split(/\s+/);
             
-            return recipeWords.some(recipeWord => 
-                availableWords.some(availableWord => 
-                    availableWord === recipeWord || 
-                    (availableWord.endsWith('s') && availableWord.slice(0, -1) === recipeWord) ||
-                    (recipeWord.endsWith('s') && recipeWord.slice(0, -1) === availableWord)
+            return ingredientWords.some(word => 
+                availableWords.some(itemWord => 
+                    itemWord === word || 
+                    (itemWord.endsWith('s') && itemWord.slice(0, -1) === word) ||
+                    (word.endsWith('s') && word.slice(0, -1) === itemWord)
                 )
             );
         };
@@ -100,37 +93,34 @@ module.exports = async function (context) {
             
             // Add common pantry items to available ingredients
             const availableIngredients = new Set([
-                ...ingredients.map(i => cleanIngredient(i)),
+                ...ingredients.map(i => i.toLowerCase()),
                 'water', 'salt', 'pepper', 'oil', 'butter', 
                 'flour', 'sugar', 'garlic', 'onion'
             ]);
 
             log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);
             
-            // Clean and filter recipe ingredients
+            // Get recipe ingredients
             const recipeIngredients = Array.isArray(recipe.ingredients) 
-                ? recipe.ingredients
-                    .map(i => cleanIngredient(i))
-                    .filter(i => i && i.length > 0 && !i.includes(':'))
+                ? recipe.ingredients.filter(i => i && typeof i === 'string' && !i.includes(':'))
                 : [];
                 
             log(`Recipe ingredients for ${recipe.title}: ${JSON.stringify(recipeIngredients)}`);
 
-            // Use the same matching logic as RecipeModal
+            // Match ingredients using exact same logic as RecipeModal
             const matchedIngredients = recipeIngredients.filter(recipeIngredient => 
                 Array.from(availableIngredients).some(availableIngredient => 
                     ingredientsMatch(recipeIngredient, availableIngredient)
                 )
             );
 
-            const missingIngredients = recipe.ingredients.filter(originalIngredient => {
-                const cleanedIngredient = cleanIngredient(originalIngredient);
-                return !Array.from(availableIngredients).some(availableIngredient => 
-                    ingredientsMatch(cleanedIngredient, availableIngredient)
-                );
-            });
+            const missingIngredients = recipeIngredients.filter(recipeIngredient => 
+                !Array.from(availableIngredients).some(availableIngredient => 
+                    ingredientsMatch(recipeIngredient, availableIngredient)
+                )
+            );
 
-            // Calculate match percentage based on actual ingredients
+            // Calculate match percentage
             const totalIngredients = recipeIngredients.length;
             const matchPercentage = totalIngredients > 0
                 ? Math.round((matchedIngredients.length / totalIngredients) * 100)
@@ -146,7 +136,7 @@ module.exports = async function (context) {
             return {
                 title: recipe.title,
                 matchPercentage,
-                missingIngredients: missingIngredients.slice(0, 3) // Keep original ingredient text
+                missingIngredients: missingIngredients.slice(0, 3)
             };
         });
 
