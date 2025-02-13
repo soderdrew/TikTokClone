@@ -26,7 +26,9 @@ interface Props {
 
 export default function RecipeMatchesModal({ visible, onClose, matches, isLoading }: Props) {
   const handleRecipePress = (match: RecipeMatch) => {
-    // Navigate to the recipe video using the ID
+    // Close the modal first
+    onClose();
+    // Then navigate to the recipe video
     router.push({
       pathname: `/(video)/${match.id}`,
       params: { autoPlay: 'true' }

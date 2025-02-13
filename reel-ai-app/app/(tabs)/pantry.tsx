@@ -142,6 +142,7 @@ export default function PantryScreen() {
   const [showRecipeMatches, setShowRecipeMatches] = useState(false);
   const [recipeMatches, setRecipeMatches] = useState<Array<{
     title: string;
+    id: string;
     matchPercentage: number;
     missingIngredients: string[];
   }>>([]);
@@ -425,6 +426,7 @@ export default function PantryScreen() {
       // Get all recipes with their ingredients
       const recipesData = await DatabaseService.getAllRecipes(100); // Get up to 100 recipes
       const recipes = recipesData.documents.map(recipe => ({
+        $id: recipe.$id,
         title: recipe.title,
         ingredients: recipe.ingredients || []
       }));
