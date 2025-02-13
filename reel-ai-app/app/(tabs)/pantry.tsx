@@ -420,14 +420,29 @@ export default function PantryScreen() {
       
       // Get ingredient names from inventory
       const ingredients = kitchenItems.map(item => item.name.toLowerCase().trim());
+      console.log('Ingredients to match:', ingredients);
       
-      // Get all recipe titles
+      // Get all recipes with their ingredients
       const recipesData = await DatabaseService.getAllRecipes(100); // Get up to 100 recipes
-      const recipeTitles = recipesData.documents.map(recipe => recipe.title);
+      const recipes = recipesData.documents.map(recipe => ({
+        title: recipe.title,
+        ingredients: recipe.ingredients || []
+      }));
+      console.log('Available recipes with ingredients:', recipes);
       
       // Call the matchRecipes cloud function
-      const response = await DatabaseService.matchRecipes(ingredients, recipeTitles);
-      setRecipeMatches(response.matches || []);
+      console.log('Calling matchRecipes with:', { ingredients, recipes });
+      const response = await DatabaseService.matchRecipes(ingredients, recipes);
+      
+      console.log('matchRecipes response:', response);
+      
+      if (!response.matches) {
+        console.error('No matches array in response:', response);
+        Alert.alert('Error', 'Invalid response format from recipe matching service');
+        return;
+      }
+      
+      setRecipeMatches(response.matches);
     } catch (error) {
       console.error('Error finding recipes:', error);
       Alert.alert('Error', 'Failed to find matching recipes. Please try again.');

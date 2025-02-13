@@ -1310,22 +1310,45 @@ export const DatabaseService = {
     },
 
     // Recipe Matching
-    matchRecipes: async (ingredients: string[], recipeTitles: string[]) => {
+    matchRecipes: async (ingredients: string[], recipes: Array<{ title: string; ingredients: string[] }>) => {
         try {
+            console.log('DatabaseService :: matchRecipes :: starting with:', {
+                ingredients,
+                recipes
+            });
+
             const response = await functions.createExecution(
                 'matchRecipes', // function ID
                 JSON.stringify({
                     ingredients,
-                    recipes: recipeTitles
+                    recipes
                 })
             );
             
-            // Cast the response to access its properties
-            const result = response as unknown as { response: string };
-            return JSON.parse(result.response || '{"recipes": []}');
+            console.log('DatabaseService :: matchRecipes :: raw response:', response);
+            
+            // Parse the response string into JSON
+            let parsedResponse;
+            try {
+                // Cast the response to access the response property
+                const result = response as unknown as { response: string };
+                parsedResponse = JSON.parse(result.response || '{"matches": []}');
+                console.log('DatabaseService :: matchRecipes :: parsed response:', parsedResponse);
+            } catch (parseError) {
+                console.error('DatabaseService :: matchRecipes :: parse error:', parseError);
+                return { matches: [] };
+            }
+
+            // Ensure we have a matches array
+            if (!parsedResponse.matches || !Array.isArray(parsedResponse.matches)) {
+                console.error('DatabaseService :: matchRecipes :: invalid response format:', parsedResponse);
+                return { matches: [] };
+            }
+
+            return parsedResponse;
         } catch (error) {
             console.error('DatabaseService :: matchRecipes :: error', error);
-            throw error;
+            return { matches: [] }; // Return empty matches instead of throwing
         }
     },
 };
