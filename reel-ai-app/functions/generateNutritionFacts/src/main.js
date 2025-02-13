@@ -144,7 +144,7 @@ export default async ({ req, res, log, error }) => {
         }
 
         log('Function completed successfully');
-        res.json({
+        return res.json({
             success: true,
             nutritionFacts,
             message: 'Nutrition facts generated successfully',
