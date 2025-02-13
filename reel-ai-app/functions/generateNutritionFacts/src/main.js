@@ -76,9 +76,10 @@ export default async ({ req, res, log, error }) => {
         try {
             log('Calling OpenAI API');
             completion = await openai.chat.completions.create({
-                model: "gpt-3.5-turbo",
+                model: "gpt-4o-mini",
                 messages: [{ role: "user", content: prompt }],
-                response_format: { type: "json_object" }
+                response_format: { type: "json_object" },
+                temperature: 0
             });
             log('Successfully received OpenAI response');
             log('Raw OpenAI response:', JSON.stringify(completion.choices[0].message.content));
