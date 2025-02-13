@@ -69,20 +69,33 @@ module.exports = async function (context) {
             };
         };
 
+        // Helper function to normalize word (handle plurals)
+        const normalizeWord = (word) => {
+            // Remove trailing 's' if it exists
+            return word.endsWith('s') ? word.slice(0, -1) : word;
+        };
+
+        // Helper function to check if words match (including plural form)
+        const wordsMatch = (recipeWord, availableWord) => {
+            const availableLower = availableWord.toLowerCase();
+            const recipeLower = recipeWord.toLowerCase();
+            return availableLower === recipeLower || // Exact match
+                   availableLower === recipeLower + 's' || // Check plural
+                   recipeLower === availableLower + 's'; // Check singular
+        };
+
         // Helper function to check if ingredients match (exactly like RecipeModal)
         const ingredientsMatch = (recipeIngredient, availableIngredient) => {
             const parsed = parseIngredient(recipeIngredient);
             if (!parsed) return false;
 
-            const ingredientWords = parsed.itemName.split(/\s+/).filter(word => word.length > 2);
+            const ingredientWords = parsed.itemName.split(/\s+/)
+                .filter(word => word.length > 2);
+            
             const availableWords = availableIngredient.toLowerCase().split(/\s+/);
             
-            return ingredientWords.some(word => 
-                availableWords.some(itemWord => 
-                    itemWord === word || 
-                    (itemWord.endsWith('s') && itemWord.slice(0, -1) === word) ||
-                    (word.endsWith('s') && word.slice(0, -1) === itemWord)
-                )
+            return ingredientWords.some(recipeWord => 
+                availableWords.some(availableWord => wordsMatch(recipeWord, availableWord))
             );
         };
 
@@ -91,11 +104,10 @@ module.exports = async function (context) {
         const matches = recipes.map(recipe => {
             log(`Processing recipe: ${recipe.title}`);
             
-            // Add common pantry items to available ingredients
+            // Add only water as common pantry item
             const availableIngredients = new Set([
                 ...ingredients.map(i => i.toLowerCase()),
-                'water', 'salt', 'pepper', 'oil', 'butter', 
-                'flour', 'sugar', 'garlic', 'onion'
+                'water'  // Only include water as a common pantry item
             ]);
 
             log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);

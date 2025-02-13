@@ -302,6 +302,15 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
         };
     };
 
+    // Helper function to check if words match (including plural form)
+    const wordsMatch = (recipeWord: string, availableWord: string) => {
+        const availableLower = availableWord.toLowerCase();
+        const recipeLower = recipeWord.toLowerCase();
+        return availableLower === recipeLower || // Exact match
+               availableLower === recipeLower + 's' || // Check plural
+               recipeLower === availableLower + 's'; // Check singular
+    };
+
     const checkIngredientsAvailability = (inventory: any[]) => {
         const newStatus: {[key: string]: IngredientStatus} = {};
         
@@ -317,14 +326,14 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
             }
 
             // More strict matching: Split both names into words and check for exact word matches
-            const ingredientWords = parsed.itemName.split(/\s+/).filter((word: string) => word.length > 2);
+            const ingredientWords = parsed.itemName.split(/\s+/)
+                .filter((word: string) => word.length > 2);
+
             const matchingItem = inventory.find(item => {
                 const itemWords = item.name.toLowerCase().split(/\s+/);
-                return ingredientWords.some((word: string) => 
-                    itemWords.some((itemWord: string) => 
-                        itemWord === word || 
-                        (itemWord.endsWith('s') && itemWord.slice(0, -1) === word) ||
-                        (word.endsWith('s') && word.slice(0, -1) === itemWord)
+                return ingredientWords.some((recipeWord: string) => 
+                    itemWords.some((availableWord: string) => 
+                        wordsMatch(recipeWord, availableWord)
                     )
                 );
             });
