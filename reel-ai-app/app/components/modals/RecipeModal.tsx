@@ -292,23 +292,46 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
         // Match quantity, unit, and item name
         const match = cleanIngredient.match(/^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*([a-zA-Z]+)?\s*(.*)/);
         
-        if (!match) return null;
+        if (!match) {
+            // If no match, treat the whole thing as the item name
+            return {
+                quantity: 1,
+                unit: 'units',
+                itemName: cleanIngredient.toLowerCase().trim()
+            };
+        }
         
         const [_, quantity, unit, itemName] = match;
         return {
-            quantity: parseFloat(eval(quantity.replace(' ', '+'))), // Safely evaluate fractions
+            quantity: quantity ? parseFloat(eval(quantity.replace(' ', '+') || '1')) : 1, // Default to 1 if no quantity
             unit: unit?.toLowerCase() || 'units',
             itemName: itemName.toLowerCase().trim()
         };
     };
 
-    // Helper function to check if words match (including plural form)
+    // Helper function to get both singular and plural forms of a word
+    const getWordForms = (word: string): string[] => {
+        const lower = word.toLowerCase();
+        if (lower.endsWith('ies')) {
+            // berries -> berry
+            return [lower, lower.slice(0, -3) + 'y'];
+        } else if (lower.endsWith('es')) {
+            // tomatoes -> tomato
+            return [lower, lower.slice(0, -2)];
+        } else if (lower.endsWith('s')) {
+            // eggs -> egg
+            return [lower, lower.slice(0, -1)];
+        } else {
+            // egg -> eggs
+            return [lower, lower + 's'];
+        }
+    };
+
+    // Helper function to check if words match (including all plural forms)
     const wordsMatch = (recipeWord: string, availableWord: string) => {
-        const availableLower = availableWord.toLowerCase();
-        const recipeLower = recipeWord.toLowerCase();
-        return availableLower === recipeLower || // Exact match
-               availableLower === recipeLower + 's' || // Check plural
-               recipeLower === availableLower + 's'; // Check singular
+        const recipeForms = getWordForms(recipeWord);
+        const availableForms = getWordForms(availableWord);
+        return recipeForms.some(r => availableForms.includes(r));
     };
 
     const checkIngredientsAvailability = (inventory: any[]) => {
@@ -320,7 +343,7 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
             if (!parsed) {
                 newStatus[ingredient] = { 
                     status: 'missing',
-                    tooltip: 'Ingredient not found in your pantry'
+                    tooltip: 'Ingredient not found in your kitchen inventory'
                 };
                 return;
             }
@@ -341,7 +364,7 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
             if (!matchingItem) {
                 newStatus[ingredient] = { 
                     status: 'missing',
-                    tooltip: 'Ingredient not found in your pantry'
+                    tooltip: 'Ingredient not found in your kitchen inventory'
                 };
                 return;
             }

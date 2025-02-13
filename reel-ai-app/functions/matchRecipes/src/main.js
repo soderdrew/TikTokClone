@@ -75,13 +75,29 @@ module.exports = async function (context) {
             return word.endsWith('s') ? word.slice(0, -1) : word;
         };
 
-        // Helper function to check if words match (including plural form)
+        // Helper function to get both singular and plural forms of a word
+        const getWordForms = (word) => {
+            const lower = word.toLowerCase();
+            if (lower.endsWith('ies')) {
+                // berries -> berry
+                return [lower, lower.slice(0, -3) + 'y'];
+            } else if (lower.endsWith('es')) {
+                // tomatoes -> tomato
+                return [lower, lower.slice(0, -2)];
+            } else if (lower.endsWith('s')) {
+                // eggs -> egg
+                return [lower, lower.slice(0, -1)];
+            } else {
+                // egg -> eggs
+                return [lower, lower + 's'];
+            }
+        };
+
+        // Helper function to check if words match (including all plural forms)
         const wordsMatch = (recipeWord, availableWord) => {
-            const availableLower = availableWord.toLowerCase();
-            const recipeLower = recipeWord.toLowerCase();
-            return availableLower === recipeLower || // Exact match
-                   availableLower === recipeLower + 's' || // Check plural
-                   recipeLower === availableLower + 's'; // Check singular
+            const recipeForms = getWordForms(recipeWord);
+            const availableForms = getWordForms(availableWord);
+            return recipeForms.some(r => availableForms.includes(r));
         };
 
         // Helper function to check if ingredients match (exactly like RecipeModal)
