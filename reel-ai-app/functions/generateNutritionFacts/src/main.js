@@ -95,12 +95,15 @@ export default async ({ req, res, log, error }) => {
             nutritionFacts = JSON.parse(completion.choices[0].message.content);
             log('Successfully parsed nutrition facts');
 
-            // Basic validation
-            if (!nutritionFacts.calories || !nutritionFacts.totalFat) {
-                error("Incomplete nutrition data from OpenAI:", nutritionFacts);
+            // Basic validation - check if all required fields are present
+            const requiredFields = ['calories', 'totalFat', 'saturatedFat', 'cholesterol', 'sodium', 'carbohydrates', 'fiber', 'sugar', 'protein', 'servingSize'];
+            const missingFields = requiredFields.filter(field => !nutritionFacts[field]);
+            
+            if (missingFields.length > 0) {
+                error("Incomplete nutrition data from OpenAI. Missing fields:", missingFields);
                 return res.json({ 
                     success: false, 
-                    message: "Incomplete nutrition data received.",
+                    message: `Incomplete nutrition data received. Missing fields: ${missingFields.join(', ')}`,
                     partialData: nutritionFacts
                 }, 500);
             }
