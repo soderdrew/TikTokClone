@@ -13,124 +13,135 @@ module.exports = async function (context) {
             throw new Error('OpenAI API key is not configured');
         }
 
-        const payload = JSON.parse(req.payload);
-        const { ingredients, recipes } = payload;
+        const payload = JSON.parse(req.payload || '{}');
+        const ingredients = payload.ingredients || [];
+        const recipes = payload.recipes || [];
 
-        if (!ingredients || !Array.isArray(ingredients) || !recipes || !Array.isArray(recipes)) {
-            error(JSON.stringify({ 
-                message: 'Invalid input format', 
-                payload,
-                hasIngredients: !!ingredients,
-                hasRecipes: !!recipes,
-                ingredientsIsArray: Array.isArray(ingredients),
-                recipesIsArray: Array.isArray(recipes)
-            }));
-            throw new Error('Invalid input format: ingredients and recipes must be arrays');
-        }
-        
         log(JSON.stringify({
-            message: 'Matching recipes with ingredients',
+            message: 'Input received',
             ingredientCount: ingredients.length,
             recipeCount: recipes.length,
             ingredients,
             recipes
         }));
 
-        const prompt = `You are a helpful cooking assistant. Your task is to analyze the available ingredients and suggest the best matching recipes.
+        // Early return if no recipes or ingredients
+        if (recipes.length === 0) {
+            log(JSON.stringify({ message: 'No recipes provided' }));
+            return res.json({ 
+                matches: [],
+                error: 'No recipes provided'
+            });
+        }
 
-Available ingredients: ${ingredients.join(", ")}.
+        const prompt = `Return a JSON array of exactly 3 recipes that best match these ingredients: ${ingredients.join(", ")}.
 
-Available recipe titles: ${recipes.join(", ")}.
+Available recipes to choose from: ${recipes.join(", ")}.
 
-Instructions:
-1. For each recipe title, estimate the common ingredients it would need based on the recipe name
-2. Calculate a match percentage based on how many of those ingredients the user has
-3. ALWAYS return exactly 3 recipes, even if match percentages are low
-4. Consider these as available basic ingredients even if not listed: water, salt, pepper, oil, common spices
-5. For each recipe, list the key ingredients that are missing (max 3 most important ones)
+Rules:
+1. Response must be a valid JSON array with exactly 3 recipes
+2. Each recipe must have: title (from available recipes), matchPercentage (0-100), and missingIngredients (array of strings)
+3. Sort by highest match percentage first
+4. Consider these as available even if not listed: water, salt, pepper, oil, basic spices
+5. Base match percentage on estimated required ingredients vs available ingredients
+6. For recipe titles, use EXACT matches from the available recipes list
 
-Return your response in this exact JSON format:
+Example response format:
 [
   {
-    "title": "Recipe Title",
+    "title": "EXACT_RECIPE_TITLE",
     "matchPercentage": 85,
     "missingIngredients": ["ingredient1", "ingredient2"]
   }
 ]
 
-Important rules:
-- You must return exactly 3 recipes
-- Sort by highest match percentage first
-- Always return valid JSON
-- Don't include any explanation text, just the JSON array
-- If a recipe needs very few ingredients and user has most of them, give it a high match percentage
-- If unsure about exact ingredients, make reasonable assumptions based on recipe title`;
+Remember: Return ONLY the JSON array, no other text. Use exact recipe titles from the provided list.`;
 
-        log(JSON.stringify({ message: 'Sending request to OpenAI', model: 'gpt-4' }));
+        log(JSON.stringify({ message: 'Sending request to OpenAI', model: 'gpt-4o-mini' }));
         
         const completion = await openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.5,  // Lower temperature for more consistent results
-            max_tokens: 1000,
-            response_format: { type: "json_object" }  // Force JSON response
+            model: "gpt-4o-mini",
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are a JSON-only response bot. You must return valid JSON arrays exactly matching the requested format. No explanation text, just JSON."
+                },
+                { 
+                    role: "user", 
+                    content: prompt 
+                }
+            ],
+            temperature: 0.3,  // Lower temperature for more consistent results
+            max_tokens: 1000
+        }).catch(err => {
+            error(JSON.stringify({ message: 'OpenAI API error', error: err.message }));
+            return null;
         });
+
+        if (!completion) {
+            // Handle OpenAI API failure with fallback matches
+            const fallbackMatches = recipes.slice(0, 3).map((title, index) => ({
+                title,
+                matchPercentage: 50 - (index * 10),
+                missingIngredients: ["API error - ingredients unknown"]
+            }));
+            return res.json({ matches: fallbackMatches });
+        }
         
         log(JSON.stringify({ message: 'Received response from OpenAI' }));
         
         let matches = [];
         try {
-            const content = completion.choices[0].message.content;
+            const content = completion.choices[0].message.content.trim();
             log(JSON.stringify({ message: 'OpenAI response content', content }));
             
-            const parsed = JSON.parse(content);
-            matches = parsed.recipes || parsed; // Handle both formats
+            // Try to extract JSON if there's any extra text
+            const jsonMatch = content.match(/\[[\s\S]*\]/);
+            const jsonContent = jsonMatch ? jsonMatch[0] : content;
+            
+            matches = JSON.parse(jsonContent);
             
             if (!Array.isArray(matches)) {
-                error(JSON.stringify({ 
-                    message: 'Parsed response is not an array', 
-                    matches,
-                    type: typeof matches 
-                }));
-                // Instead of empty array, create fallback matches
-                matches = recipes.slice(0, 3).map((title, index) => ({
-                    title,
-                    matchPercentage: 50 - (index * 10),
-                    missingIngredients: ["Ingredient information unavailable"]
-                }));
-            } else {
-                log(JSON.stringify({ 
-                    message: 'Successfully parsed matches', 
-                    matchCount: matches.length,
-                    matches 
-                }));
+                throw new Error('Parsed response is not an array');
             }
 
-            // Ensure we always have exactly 3 matches
+            // Validate and fix each match
+            matches = matches.map(match => ({
+                title: match.title || 'Unknown Recipe',
+                matchPercentage: Math.min(100, Math.max(0, parseInt(match.matchPercentage) || 0)),
+                missingIngredients: Array.isArray(match.missingIngredients) ? 
+                    match.missingIngredients.slice(0, 3) : 
+                    ["Ingredients unknown"]
+            }));
+
+            // Ensure exactly 3 matches
             while (matches.length < 3 && recipes.length > matches.length) {
                 const unusedRecipe = recipes.find(r => !matches.find(m => m.title === r));
                 if (unusedRecipe) {
                     matches.push({
                         title: unusedRecipe,
                         matchPercentage: 30,
-                        missingIngredients: ["Ingredient information unavailable"]
+                        missingIngredients: ["Ingredients to be determined"]
                     });
                 }
             }
 
-            // Limit to top 3 if we somehow got more
-            matches = matches.slice(0, 3);
+            // Limit to top 3 and sort by match percentage
+            matches = matches
+                .slice(0, 3)
+                .sort((a, b) => b.matchPercentage - a.matchPercentage);
+
         } catch (parseError) {
             error(JSON.stringify({ 
-                message: 'Error parsing OpenAI response', 
+                message: 'Error handling OpenAI response', 
                 error: parseError.message,
                 content: completion.choices[0].message.content 
             }));
-            // Create fallback matches instead of empty array
+            // Use fallback matches
             matches = recipes.slice(0, 3).map((title, index) => ({
                 title,
                 matchPercentage: 50 - (index * 10),
-                missingIngredients: ["Ingredient information unavailable"]
+                missingIngredients: ["Parse error - ingredients unknown"]
             }));
         }
         
@@ -140,22 +151,29 @@ Important rules:
             matches 
         }));
 
-        return res.json({ matches });
+        return res.json({ 
+            matches,
+            success: true
+        });
     } catch (e) {
         error(JSON.stringify({ 
-            message: 'Error in function execution', 
+            message: 'Critical error in function execution', 
             error: e.message,
             stack: e.stack 
         }));
-        // Even in case of error, return some matches
-        const fallbackMatches = recipes.slice(0, 3).map((title, index) => ({
-            title,
+        // Emergency fallback - we MUST return 3 recipes
+        const fallbackMatches = (payload?.recipes || []).slice(0, 3).map((title, index) => ({
+            title: title || `Recipe ${index + 1}`,
             matchPercentage: 40 - (index * 10),
-            missingIngredients: ["Error occurred while matching"]
+            missingIngredients: ["Emergency fallback - ingredients unknown"]
         }));
         return res.json({ 
-            matches: fallbackMatches,
-            error: e.message 
+            matches: fallbackMatches.length > 0 ? fallbackMatches : [
+                { title: "Emergency Recipe 1", matchPercentage: 40, missingIngredients: ["Emergency fallback"] },
+                { title: "Emergency Recipe 2", matchPercentage: 30, missingIngredients: ["Emergency fallback"] },
+                { title: "Emergency Recipe 3", matchPercentage: 20, missingIngredients: ["Emergency fallback"] }
+            ],
+            error: e.message
         });
     }
 }
