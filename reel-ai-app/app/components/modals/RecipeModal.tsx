@@ -329,6 +329,14 @@ export default function RecipeModal({ visible, onClose, recipe }: RecipeModalPro
 
     // Helper function to check if words match (including all plural forms)
     const wordsMatch = (recipeWord: string, availableWord: string) => {
+        // Special case for eggs
+        const recipeWordLower = recipeWord.toLowerCase();
+        const availableWordLower = availableWord.toLowerCase();
+        if ((recipeWordLower === 'egg' && availableWordLower === 'eggs') ||
+            (recipeWordLower === 'eggs' && availableWordLower === 'egg')) {
+            return true;
+        }
+
         const recipeForms = getWordForms(recipeWord);
         const availableForms = getWordForms(availableWord);
         return recipeForms.some(r => availableForms.includes(r));

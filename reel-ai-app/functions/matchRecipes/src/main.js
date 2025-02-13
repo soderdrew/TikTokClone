@@ -95,6 +95,14 @@ module.exports = async function (context) {
 
         // Helper function to check if words match (including all plural forms)
         const wordsMatch = (recipeWord, availableWord) => {
+            // Special case for eggs
+            const recipeWordLower = recipeWord.toLowerCase();
+            const availableWordLower = availableWord.toLowerCase();
+            if ((recipeWordLower === 'egg' && availableWordLower === 'eggs') ||
+                (recipeWordLower === 'eggs' && availableWordLower === 'egg')) {
+                return true;
+            }
+
             const recipeForms = getWordForms(recipeWord);
             const availableForms = getWordForms(availableWord);
             return recipeForms.some(r => availableForms.includes(r));
@@ -163,6 +171,7 @@ module.exports = async function (context) {
 
             return {
                 title: recipe.title,
+                id: recipe.$id,
                 matchPercentage,
                 missingIngredients: missingIngredients.slice(0, 3)
             };

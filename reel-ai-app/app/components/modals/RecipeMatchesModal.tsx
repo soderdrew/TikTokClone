@@ -12,6 +12,7 @@ import { router } from 'expo-router';
 
 interface RecipeMatch {
   title: string;
+  id: string;
   matchPercentage: number;
   missingIngredients: string[];
 }
@@ -24,11 +25,10 @@ interface Props {
 }
 
 export default function RecipeMatchesModal({ visible, onClose, matches, isLoading }: Props) {
-  const handleRecipePress = (title: string) => {
-    // Navigate to the recipe video
-    // We'll need to update this with the actual video ID
+  const handleRecipePress = (match: RecipeMatch) => {
+    // Navigate to the recipe video using the ID
     router.push({
-      pathname: `/(video)/${title}`,
+      pathname: `/(video)/${match.id}`,
       params: { autoPlay: 'true' }
     });
   };
@@ -73,7 +73,7 @@ export default function RecipeMatchesModal({ visible, onClose, matches, isLoadin
                 <TouchableOpacity
                   key={index}
                   style={styles.matchItem}
-                  onPress={() => handleRecipePress(match.title)}
+                  onPress={() => handleRecipePress(match)}
                 >
                   <View style={styles.matchHeader}>
                     <Text style={styles.matchTitle}>{match.title}</Text>
