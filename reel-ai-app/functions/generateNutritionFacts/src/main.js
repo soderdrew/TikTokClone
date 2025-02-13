@@ -1,7 +1,7 @@
-import { Client, Databases, Models } from 'node-appwrite';
-import OpenAI from 'openai';
+const { Client, Databases } = require('node-appwrite');
+const OpenAI = require('openai');
 
-export default async ({ req, res, log, error }) => {
+module.exports = async ({ req, res, log, error }) => {
     try {
         // Log the start of function execution
         log('Starting nutrition facts generation');
@@ -88,7 +88,7 @@ export default async ({ req, res, log, error }) => {
         try {
             log('Calling OpenAI API');
             completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini",
+                model: "gpt-3.5-turbo",
                 messages: [{ role: "user", content: prompt }],
                 response_format: { type: "json_object" }
             });
@@ -134,7 +134,7 @@ export default async ({ req, res, log, error }) => {
                 databaseId,
                 videosCollectionId,
                 videoId,
-                { nutritionFacts }
+                { nutritionFacts: JSON.stringify(nutritionFacts) }
             );
             log('Successfully saved nutrition facts');
         } catch (e) {
