@@ -1,0 +1,17 @@
+{
+    "name": "generate-nutrition-facts",
+    "version": "1.0.0",
+    "description": "Generates nutrition facts for a recipe using OpenAI and Appwrite",
+    "main": "src/main.js",
+    "type": "module",
+    "scripts": {
+      "start": "node src/main.js"
+    },
+    "dependencies": {
+      "node-appwrite": "^11.0.0",
+      "openai": "^4.24.1"
+    },
+    "engines": {
+      "node": "18.x"
+    }
+  }

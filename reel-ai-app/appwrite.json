@@ -290,6 +290,13 @@
                     "min": 1,
                     "max": 100,
                     "default": 4
+                },
+                {
+                    "key": "nutritionFacts",
+                    "type": "string",
+                    "size": 4000,
+                    "required": false,
+                    "array": false
                 }
             ],
             "indexes": [
@@ -920,6 +927,32 @@
                 ".npm"
             ],
             "path": "functions/matchRecipes"
+        },
+        {
+            "$id": "generateNutritionFacts",
+            "name": "generateNutritionFacts",
+            "runtime": "node-18.0",
+            "specification": "s-0.5vcpu-512mb",
+            "execute": [
+                "any"
+            ],
+            "events": [],
+            "scopes": [
+                "users.read",
+                "databases.read",
+                "databases.write"
+            ],
+            "schedule": "",
+            "timeout": 60,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/generateNutritionFacts"
         }
     ]
 }

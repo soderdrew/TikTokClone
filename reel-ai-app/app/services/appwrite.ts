@@ -1453,4 +1453,4 @@ export const StorageService = {
     }
 };
 
-export { client, account, databases, storage }; 
+export { client, account, databases, storage, functions }; 
