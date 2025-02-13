@@ -4,69 +4,64 @@ module.exports = async function (context) {
     const { req, res, log, error } = context;
 
     try {
-        const openai = new OpenAI({
-            apiKey: process.env.OPENAI_API_KEY,
-        });
-
-        if (!process.env.OPENAI_API_KEY) {
-            error(JSON.stringify({ message: 'OpenAI API key is not configured' }));
-            throw new Error('OpenAI API key is not configured');
-        }
-
-        // Log the raw payload first
-        log(JSON.stringify({ message: 'Raw payload received', payload: req.payload }));
-
+        // MISSION CRITICAL: Enhanced payload parsing
+        log('Starting recipe matching - CRITICAL MISSION');
+        
+        // Get the raw body from the request
+        const rawBody = req.body || req.payload;
+        log(`Raw request body: ${JSON.stringify(rawBody)}`);
+        
         let payload;
         try {
-            payload = typeof req.payload === 'string' ? JSON.parse(req.payload) : req.payload;
-            log(JSON.stringify({ message: 'Parsed payload', payload }));
+            // Handle different payload formats
+            if (typeof rawBody === 'string') {
+                payload = JSON.parse(rawBody);
+            } else if (rawBody && typeof rawBody === 'object') {
+                payload = rawBody;
+            } else {
+                payload = {};
+            }
+            log(`Parsed payload: ${JSON.stringify(payload)}`);
         } catch (parseError) {
-            error(JSON.stringify({ message: 'Failed to parse payload', error: parseError.message }));
-            throw new Error('Invalid payload format');
+            error(`Payload parsing error: ${parseError.message}`);
+            throw new Error(`Invalid payload format: ${parseError.message}`);
         }
 
-        const ingredients = payload?.ingredients || [];
-        const recipes = payload?.recipes || [];
+        // Extract data with detailed logging
+        const ingredients = Array.isArray(payload.ingredients) ? payload.ingredients : [];
+        const recipes = Array.isArray(payload.recipes) ? payload.recipes : [];
+        
+        log(`Found ${ingredients.length} ingredients and ${recipes.length} recipes`);
+        log(`Ingredients: ${JSON.stringify(ingredients)}`);
+        log(`Recipes: ${JSON.stringify(recipes.map(r => r.title))}`);
 
-        // Log the extracted data
-        log(JSON.stringify({
-            message: 'Extracted data',
-            ingredientCount: ingredients.length,
-            recipeCount: recipes.length,
-            ingredients,
-            recipes: recipes.map(r => ({ 
-                title: r.title,
-                ingredientCount: r.ingredients?.length || 0
-            }))
-        }));
-
-        // Early return if no recipes or ingredients
         if (recipes.length === 0) {
-            log(JSON.stringify({ message: 'No recipes provided' }));
+            log('CRITICAL: No recipes found in payload');
             return res.json({ 
                 matches: [],
                 error: 'No recipes provided'
             });
         }
 
-        // Calculate matches without using OpenAI
+        // Calculate matches with enhanced logging
+        log('Starting recipe matching algorithm...');
         const matches = recipes.map(recipe => {
+            log(`Processing recipe: ${recipe.title}`);
+            
             const availableIngredients = new Set([
                 ...ingredients.map(i => i.toLowerCase()),
-                // Add common pantry staples
                 'water', 'salt', 'pepper', 'oil', 'butter', 
                 'flour', 'sugar', 'garlic', 'onion'
             ]);
 
-            // Log the ingredients we're matching against
-            log(JSON.stringify({
-                message: 'Matching recipe',
-                title: recipe.title,
-                recipeIngredients: recipe.ingredients,
-                availableIngredients: Array.from(availableIngredients)
-            }));
+            log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);
+            
+            const recipeIngredients = Array.isArray(recipe.ingredients) 
+                ? recipe.ingredients.map(i => i.toLowerCase())
+                : [];
+                
+            log(`Recipe ingredients for ${recipe.title}: ${JSON.stringify(recipeIngredients)}`);
 
-            const recipeIngredients = recipe.ingredients.map(i => i.toLowerCase());
             const matchedIngredients = recipeIngredients.filter(ingredient => 
                 availableIngredients.has(ingredient)
             );
@@ -79,46 +74,40 @@ module.exports = async function (context) {
                 ? Math.round((matchedIngredients.length / recipeIngredients.length) * 100)
                 : 0;
 
+            log(`Match results for ${recipe.title}: ${matchPercentage}% match`);
+
             return {
                 title: recipe.title,
                 matchPercentage,
-                missingIngredients: missingIngredients.slice(0, 3) // Limit to top 3 missing ingredients
+                missingIngredients: missingIngredients.slice(0, 3)
             };
         });
 
-        // Sort by match percentage and take top 3
+        // Sort and select top matches
         const topMatches = matches
             .sort((a, b) => b.matchPercentage - a.matchPercentage)
             .slice(0, 3);
 
-        log(JSON.stringify({ 
-            message: 'Calculated matches', 
-            matchCount: topMatches.length, 
-            matches: topMatches 
-        }));
+        log(`Final matches selected: ${JSON.stringify(topMatches)}`);
 
+        // Return successful response
         return res.json({ 
             matches: topMatches,
             success: true
         });
     } catch (e) {
-        error(JSON.stringify({ 
-            message: 'Critical error in function execution', 
-            error: e.message,
-            stack: e.stack 
-        }));
-        // Emergency fallback - we MUST return 3 recipes
-        const fallbackMatches = (payload?.recipes || []).slice(0, 3).map((recipe, index) => ({
-            title: recipe.title || `Recipe ${index + 1}`,
-            matchPercentage: 40 - (index * 10),
-            missingIngredients: ["Emergency fallback - ingredients unknown"]
-        }));
+        error(`CRITICAL ERROR: ${e.message}`);
+        error(`Stack trace: ${e.stack}`);
+        
+        // Emergency fallback with basic recipes
+        const fallbackMatches = [
+            { title: "Emergency Recipe 1", matchPercentage: 40, missingIngredients: ["Emergency fallback"] },
+            { title: "Emergency Recipe 2", matchPercentage: 30, missingIngredients: ["Emergency fallback"] },
+            { title: "Emergency Recipe 3", matchPercentage: 20, missingIngredients: ["Emergency fallback"] }
+        ];
+        
         return res.json({ 
-            matches: fallbackMatches.length > 0 ? fallbackMatches : [
-                { title: "Emergency Recipe 1", matchPercentage: 40, missingIngredients: ["Emergency fallback"] },
-                { title: "Emergency Recipe 2", matchPercentage: 30, missingIngredients: ["Emergency fallback"] },
-                { title: "Emergency Recipe 3", matchPercentage: 20, missingIngredients: ["Emergency fallback"] }
-            ],
+            matches: fallbackMatches,
             error: e.message
         });
     }
