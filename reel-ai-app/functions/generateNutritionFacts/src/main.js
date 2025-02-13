@@ -1,18 +1,14 @@
-const { Client, Databases } = require('node-appwrite');
-const OpenAI = require('openai');
+import { Client, Databases } from 'node-appwrite';
+import OpenAI from 'openai';
 
-module.exports = async ({ req, res, log, error }) => {
+export default async ({ req, res, log, error }) => {
     try {
-        // Log the start of function execution
         log('Starting nutrition facts generation');
 
         if (!req.body) {
             error('Missing request body');
             return res.json({ success: false, message: 'Missing request body' }, 400);
         }
-
-        // Log the request body
-        log('Request body:', req.body);
 
         const data = JSON.parse(req.body);
         if (!data.videoId) {
@@ -24,17 +20,12 @@ module.exports = async ({ req, res, log, error }) => {
         log('Processing videoId:', videoId);
 
         // Validate environment variables
-        if (!process.env.APPWRITE_FUNCTION_API_ENDPOINT) {
-            error('Missing APPWRITE_FUNCTION_API_ENDPOINT environment variable');
-            return res.json({ success: false, message: 'Appwrite endpoint not configured' }, 500);
-        }
-        if (!process.env.APPWRITE_FUNCTION_PROJECT_ID) {
-            error('Missing APPWRITE_FUNCTION_PROJECT_ID environment variable');
-            return res.json({ success: false, message: 'Appwrite project ID not configured' }, 500);
-        }
-        if (!process.env.APPWRITE_API_KEY) {
-            error('Missing APPWRITE_API_KEY environment variable');
-            return res.json({ success: false, message: 'Appwrite API key not configured' }, 500);
+        if (!process.env.APPWRITE_FUNCTION_API_ENDPOINT || 
+            !process.env.APPWRITE_FUNCTION_PROJECT_ID || 
+            !process.env.APPWRITE_API_KEY ||
+            !process.env.OPENAI_API_KEY) {
+            error('Missing required environment variables');
+            return res.json({ success: false, message: 'Required environment variables are missing' }, 500);
         }
 
         // Appwrite setup
@@ -48,11 +39,6 @@ module.exports = async ({ req, res, log, error }) => {
         const videosCollectionId = 'videos';
 
         // OpenAI setup
-        if (!process.env.OPENAI_API_KEY) {
-            error('Missing OPENAI_API_KEY environment variable');
-            return res.json({ success: false, message: 'OpenAI API key not configured' }, 500);
-        }
-
         const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
         // Retrieve recipe data from Appwrite
