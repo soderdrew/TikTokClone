@@ -57,41 +57,29 @@ module.exports = async function (context) {
             // Skip section headers and empty strings
             if (cleaned.includes(':') || cleaned.length === 0) return '';
 
-            // Remove measurements with units
-            cleaned = cleaned.replace(/^[\d\s./]+(cup|tsp|tbsp|teaspoon|tablespoon|pound|lb|oz|ounce|g|gram|ml|liter|l)s?\b/i, '');
+            // Parse ingredient to extract quantity, unit, and name (similar to RecipeModal)
+            const match = cleaned.match(/^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*([a-zA-Z]+)?\s*(.*)/);
             
-            // Remove numeric quantities at start
-            cleaned = cleaned.replace(/^[\d\s./]+/, '');
-
-            // Remove common descriptors and states
-            const descriptors = [
-                'large', 'medium', 'small', 'fresh', 'dried', 'ground', 'chopped',
-                'minced', 'diced', 'sliced', 'grated', 'shredded', 'softened',
-                'melted', 'room temperature', 'cold', 'warm', 'hot', 'frozen',
-                'canned', 'whole', 'all-purpose', 'purpose', 'optional'
-            ];
-            const descriptorPattern = new RegExp(`\\b(${descriptors.join('|')})\\b`, 'gi');
-            cleaned = cleaned.replace(descriptorPattern, '');
+            if (match) {
+                // Extract just the ingredient name, ignoring quantity and unit
+                cleaned = match[3];
+            }
 
             // Remove parenthetical notes
             cleaned = cleaned.replace(/\([^)]*\)/g, '');
 
-            // Remove everything after common separators
+            // Split at common separators and take first part
             cleaned = cleaned.split(/[,.]|\bor\b|\bfor\b/)[0];
 
             // Final cleanup
-            cleaned = cleaned.replace(/\s+/g, ' ') // Normalize spaces
-                           .trim();
-
-            // Special cases
-            if (cleaned.includes('egg')) cleaned = 'eggs';
-            if (cleaned.includes('bread crumb')) cleaned = 'breadcrumbs';
+            cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
             log(`Cleaned ingredient: "${ingredient}" -> "${cleaned}"`);
             return cleaned;
         };
 
-        // Helper function to check if two ingredients match using word-by-word comparison
+        // Helper function to check if ingredients match using word-by-word comparison
+        // This is the same logic as RecipeModal
         const ingredientsMatch = (recipeIngredient, availableIngredient) => {
             const recipeWords = recipeIngredient.split(/\s+/).filter(word => word.length > 2);
             const availableWords = availableIngredient.split(/\s+/);
@@ -110,6 +98,7 @@ module.exports = async function (context) {
         const matches = recipes.map(recipe => {
             log(`Processing recipe: ${recipe.title}`);
             
+            // Add common pantry items to available ingredients
             const availableIngredients = new Set([
                 ...ingredients.map(i => cleanIngredient(i)),
                 'water', 'salt', 'pepper', 'oil', 'butter', 
@@ -118,7 +107,7 @@ module.exports = async function (context) {
 
             log(`Available ingredients for ${recipe.title}: ${JSON.stringify(Array.from(availableIngredients))}`);
             
-            // Handle recipe ingredients that might be an array of strings or a single string
+            // Clean and filter recipe ingredients
             const recipeIngredients = Array.isArray(recipe.ingredients) 
                 ? recipe.ingredients
                     .map(i => cleanIngredient(i))
@@ -127,19 +116,21 @@ module.exports = async function (context) {
                 
             log(`Recipe ingredients for ${recipe.title}: ${JSON.stringify(recipeIngredients)}`);
 
+            // Use the same matching logic as RecipeModal
             const matchedIngredients = recipeIngredients.filter(recipeIngredient => 
                 Array.from(availableIngredients).some(availableIngredient => 
                     ingredientsMatch(recipeIngredient, availableIngredient)
                 )
             );
 
-            const missingIngredients = recipeIngredients.filter(recipeIngredient => 
-                !Array.from(availableIngredients).some(availableIngredient => 
-                    ingredientsMatch(recipeIngredient, availableIngredient)
-                )
-            );
+            const missingIngredients = recipe.ingredients.filter(originalIngredient => {
+                const cleanedIngredient = cleanIngredient(originalIngredient);
+                return !Array.from(availableIngredients).some(availableIngredient => 
+                    ingredientsMatch(cleanedIngredient, availableIngredient)
+                );
+            });
 
-            // Calculate match percentage based on actual ingredients (excluding headers and empty strings)
+            // Calculate match percentage based on actual ingredients
             const totalIngredients = recipeIngredients.length;
             const matchPercentage = totalIngredients > 0
                 ? Math.round((matchedIngredients.length / totalIngredients) * 100)
@@ -152,15 +143,10 @@ module.exports = async function (context) {
             log(`Matched ingredients: ${JSON.stringify(matchedIngredients)}`);
             log(`Missing ingredients: ${JSON.stringify(missingIngredients)}`);
 
-            // Find the original ingredients that correspond to the missing cleaned ingredients
-            const originalMissingIngredients = recipe.ingredients
-                .filter(i => missingIngredients.includes(cleanIngredient(i)))
-                .slice(0, 3);
-
             return {
                 title: recipe.title,
                 matchPercentage,
-                missingIngredients: originalMissingIngredients
+                missingIngredients: missingIngredients.slice(0, 3) // Keep original ingredient text
             };
         });
 

@@ -1330,22 +1330,28 @@ export const DatabaseService = {
             // Parse the response string into JSON
             let parsedResponse;
             try {
-                // Cast the response to access the response property
-                const result = response as unknown as { response: string };
-                parsedResponse = JSON.parse(result.response || '{"matches": []}');
+                // First parse: Get the responseBody from Appwrite's execution result
+                const result = response as unknown as { responseBody: string };
+                if (!result.responseBody) {
+                    console.error('DatabaseService :: matchRecipes :: no responseBody in result:', result);
+                    return { matches: [] };
+                }
+
+                // Second parse: Parse the actual response string into an object
+                parsedResponse = JSON.parse(result.responseBody);
                 console.log('DatabaseService :: matchRecipes :: parsed response:', parsedResponse);
+
+                // Validate the parsed response has the expected format
+                if (!parsedResponse || !parsedResponse.matches || !Array.isArray(parsedResponse.matches)) {
+                    console.error('DatabaseService :: matchRecipes :: invalid response format:', parsedResponse);
+                    return { matches: [] };
+                }
+
+                return parsedResponse;
             } catch (parseError) {
                 console.error('DatabaseService :: matchRecipes :: parse error:', parseError);
                 return { matches: [] };
             }
-
-            // Ensure we have a matches array
-            if (!parsedResponse.matches || !Array.isArray(parsedResponse.matches)) {
-                console.error('DatabaseService :: matchRecipes :: invalid response format:', parsedResponse);
-                return { matches: [] };
-            }
-
-            return parsedResponse;
         } catch (error) {
             console.error('DatabaseService :: matchRecipes :: error', error);
             return { matches: [] }; // Return empty matches instead of throwing
