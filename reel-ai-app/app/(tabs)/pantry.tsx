@@ -7,6 +7,7 @@ import AddItemModal from '../components/modals/AddItemModal';
 import EditItemModal from '../components/modals/EditItemModal';
 import VoiceItemsModal from '../components/modals/VoiceItemsModal';
 import { getInventoryItems, deleteInventoryItem, updateInventoryItem, createInventoryItem, combineInventoryItemsWithAI } from '../services/inventoryService';
+import { DatabaseService } from '../services/appwrite';
 
 const { width } = Dimensions.get('window');
 
@@ -136,6 +137,7 @@ export default function PantryScreen() {
   const [selectedItem, setSelectedItem] = useState<any>(null);
   const [kitchenItems, setKitchenItems] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -403,6 +405,33 @@ export default function PantryScreen() {
     setShowInputTypeModal(true);
   };
 
+  const handleFindRecipes = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get ingredient names from inventory
+      const ingredients = kitchenItems.map(item => item.name.toLowerCase().trim());
+      
+      // Get all recipe titles
+      const recipesData = await DatabaseService.getAllRecipes(100); // Get up to 100 recipes
+      const recipeTitles = recipesData.documents.map(recipe => recipe.title);
+      
+      // Call the matchRecipes cloud function
+      const response = await DatabaseService.matchRecipes(ingredients, recipeTitles);
+      
+      // Navigate to explore screen with matched recipes
+      router.push({
+        pathname: '/(tabs)/explore',
+        params: { matchedRecipes: JSON.stringify(response.recipes) }
+      });
+    } catch (error) {
+      console.error('Error finding recipes:', error);
+      Alert.alert('Error', 'Failed to find matching recipes. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renderInputTypeModal = () => (
     <Modal
       visible={showInputTypeModal}
@@ -462,6 +491,12 @@ export default function PantryScreen() {
           <Text style={styles.title}>Kitchen Ingredients</Text>
           <Text style={styles.pixelSubtitle}>Your Available Items</Text>
         </View>
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setShowInputTypeModal(true)}
+        >
+          <Ionicons name="add" size={20} color="white" />
+        </TouchableOpacity>
       </View>
 
       {/* Search Bar */}
@@ -496,12 +531,17 @@ export default function PantryScreen() {
           />
         )}
 
-        <TouchableOpacity 
-          style={styles.floatingAddButton}
-          onPress={() => setShowInputTypeModal(true)}
-        >
-          <Ionicons name="add" size={32} color="white" />
-        </TouchableOpacity>
+        {/* Bottom Buttons */}
+        <View style={styles.bottomButtons}>
+          <TouchableOpacity 
+            style={styles.findRecipesButton}
+            onPress={handleFindRecipes}
+            disabled={isLoading || kitchenItems.length === 0}
+          >
+            <Ionicons name="restaurant" size={24} color="white" />
+            <Text style={styles.findRecipesText}>Find Recipes</Text>
+          </TouchableOpacity>
+        </View>
 
         {renderInputTypeModal()}
 
@@ -546,46 +586,63 @@ const styles = StyleSheet.create({
     marginTop: 60,
     marginBottom: 20,
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     width: '100%',
   },
   headerTextContainer: {
-    alignItems: 'center',
+    flex: 1,
+    marginRight: 16,
   },
   title: {
     fontSize: 28,
     color: 'white',
     fontFamily: 'SpaceMono',
     marginBottom: 8,
-    textAlign: 'center',
   },
   pixelSubtitle: {
     fontSize: 16,
     color: '#4a9eff',
     fontFamily: 'SpaceMono',
-    textAlign: 'center',
   },
   contentContainer: {
     flex: 1,
     position: 'relative',
   },
-  floatingAddButton: {
+  bottomButtons: {
     position: 'absolute',
     bottom: 20,
-    right: 20,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#4a9eff',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  findRecipesButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#2d7cd1',
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+  },
+  findRecipesText: {
+    color: 'white',
+    marginLeft: 8,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4a9eff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyMessage: {
     color: '#999',

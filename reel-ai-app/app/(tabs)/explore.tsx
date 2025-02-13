@@ -17,8 +17,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DatabaseService, AuthService } from '../services/appwrite';
-import { Models } from 'react-native-appwrite';
-import { router } from 'expo-router';
+import { Models, Query } from 'react-native-appwrite';
+import { router, useLocalSearchParams } from 'expo-router';
 import { debounce } from 'lodash';
 import FilterButton from '../components/filters/FilterButton';
 import FilterModal from '../components/filters/FilterModal';
@@ -50,6 +50,14 @@ interface SearchHistoryItem extends Models.Document {
   updatedAt: string;
 }
 
+interface RecipeFilters {
+  cuisine?: string[];
+  difficulty?: string[];
+  cookingTime?: string[];
+  dietaryFlags?: string[];
+  titles?: string[];
+}
+
 export default function ExploreScreen() {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState('');
@@ -63,6 +71,11 @@ export default function ExploreScreen() {
   const [hasMoreRecipes, setHasMoreRecipes] = React.useState(true);
   const lastHistoryId = React.useRef<string | null>(null);
   const lastRecipeId = React.useRef<string | null>(null);
+  const [matchedRecipes, setMatchedRecipes] = React.useState<string[]>([]);
+
+  // Get matched recipes from route params
+  const params = useLocalSearchParams();
+  const matchedRecipesParam = params.matchedRecipes as string | undefined;
 
   // New state for filters
   const [activeFilterId, setActiveFilterId] = React.useState<string | null>(null);
@@ -94,6 +107,17 @@ export default function ExploreScreen() {
       loadRecipes();
     }
   }, [userId, selectedCategory, selectedFilters]);
+
+  React.useEffect(() => {
+    if (matchedRecipesParam) {
+      try {
+        const parsedRecipes = JSON.parse(matchedRecipesParam);
+        setMatchedRecipes(parsedRecipes);
+      } catch (error) {
+        console.error('Error parsing matched recipes:', error);
+      }
+    }
+  }, [matchedRecipesParam]);
 
   const loadUserAndData = async () => {
     try {
@@ -150,6 +174,10 @@ export default function ExploreScreen() {
       }
 
       let recipesData;
+      const titleQueries = matchedRecipes.length > 0 
+        ? [Query.equal('title', matchedRecipes)]
+        : [];
+
       const filters = {
         cuisine: selectedFilters.cuisine.length > 0 ? selectedFilters.cuisine : undefined,
         difficulty: selectedFilters.difficulty.length > 0 ? selectedFilters.difficulty : undefined,
@@ -163,13 +191,15 @@ export default function ExploreScreen() {
           category?.cuisine || '',
           10,
           loadMore ? lastRecipeId.current : null,
-          filters
+          filters,
+          titleQueries
         );
       } else {
         recipesData = await DatabaseService.getAllRecipes(
           10,
           loadMore ? lastRecipeId.current : null,
-          filters
+          filters,
+          titleQueries
         );
       }
 

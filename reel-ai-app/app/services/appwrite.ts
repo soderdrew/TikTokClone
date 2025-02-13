@@ -1,4 +1,4 @@
-import { Client, Account, ID, Models, Databases, Query, Storage } from 'react-native-appwrite';
+import { Client, Account, ID, Models, Databases, Query, Storage, Functions } from 'react-native-appwrite';
 import Constants from 'expo-constants';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { Platform } from 'react-native';
@@ -37,6 +37,7 @@ client
 const account = new Account(client);
 const databases = new Databases(client);
 const storage = new Storage(client);
+const functions = new Functions(client);
 
 // Database IDs - we'll create these in Appwrite Console
 const DATABASE_ID = 'reel-ai-main';
@@ -848,9 +849,10 @@ export const DatabaseService = {
     },
 
     // Recipe Methods
-    getAllRecipes: async (limit: number = 10, lastId?: string | null, filters?: RecipeFilters) => {
+    getAllRecipes: async (limit: number = 10, lastId?: string | null, filters?: RecipeFilters, additionalQueries: any[] = []) => {
         try {
             const queries: any[] = [
+                ...additionalQueries,
                 Query.orderDesc('createdAt'),
                 Query.limit(limit)
             ];
@@ -918,9 +920,10 @@ export const DatabaseService = {
         }
     },
 
-    getRecipesByCuisine: async (cuisine: string, limit: number = 10, lastId?: string | null, filters?: RecipeFilters) => {
+    getRecipesByCuisine: async (cuisine: string, limit: number = 10, lastId?: string | null, filters?: RecipeFilters, additionalQueries: any[] = []) => {
         try {
             const queries: any[] = [
+                ...additionalQueries,
                 Query.equal('cuisine', cuisine),
                 Query.orderDesc('createdAt'),
                 Query.limit(limit)
@@ -1304,7 +1307,27 @@ export const DatabaseService = {
             COLLECTIONS.VIDEOS,
             videoId
         );
-    }
+    },
+
+    // Recipe Matching
+    matchRecipes: async (ingredients: string[], recipeTitles: string[]) => {
+        try {
+            const response = await functions.createExecution(
+                'matchRecipes', // function ID
+                JSON.stringify({
+                    ingredients,
+                    recipes: recipeTitles
+                })
+            );
+            
+            // Cast the response to access its properties
+            const result = response as unknown as { response: string };
+            return JSON.parse(result.response || '{"recipes": []}');
+        } catch (error) {
+            console.error('DatabaseService :: matchRecipes :: error', error);
+            throw error;
+        }
+    },
 };
 
 // Storage service

@@ -1,0 +1,12 @@
+{
+  "name": "match-recipes",
+  "version": "1.0.0",
+  "description": "Match available recipes with user's ingredients using AI",
+  "main": "src/main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "openai": "^4.24.1"
+  }
+}

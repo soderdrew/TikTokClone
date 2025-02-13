@@ -902,6 +902,24 @@
             "entrypoint": "src/main.js",
             "commands": "npm install",
             "path": "functions/transcribeAudio"
+        },
+        {
+            "$id": "matchRecipes",
+            "name": "matchRecipes",
+            "runtime": "node-18.0",
+            "execute": ["any"],
+            "events": [],
+            "schedule": "",
+            "timeout": 15,
+            "enabled": true,
+            "logging": true,
+            "entrypoint": "src/main.js",
+            "commands": "npm install",
+            "ignore": [
+                "node_modules",
+                ".npm"
+            ],
+            "path": "functions/matchRecipes"
         }
     ]
 }
